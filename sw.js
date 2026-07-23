@@ -1,6 +1,12 @@
 // Ελάχιστο service worker — μόνο για να είναι "installable" το PWA (Add to Home Screen).
 // Δεν κάνει καθόλου caching των Google API κλήσεων (πάντα ζωντανά δεδομένα).
-const HV_CACHE = "hvacr-shell-v1";
+//
+// ΣΗΜΑΝΤΙΚΟ: network-first (όχι cache-first) για τα δικά μας αρχεία shell, ώστε κάθε
+// νέα έκδοση που ανεβαίνει στο GitHub Pages να φτάνει αμέσως στο κινητό όσο υπάρχει
+// σύνδεση — το cache χρησιμεύει μόνο ως fallback όταν δεν υπάρχει δίκτυο.
+// Αν ποτέ χρειαστεί να αλλάξει η στρατηγική, ανέβασε και ΝΕΟ όνομα cache (HV_CACHE) —
+// αλλιώς οι φυλλομετρητές δεν ξαναβλέπουν καν αυτό το ίδιο το sw.js ως "αλλαγμένο".
+const HV_CACHE = "hvacr-shell-v2";
 const HV_SHELL_FILES = [
   "./index.html",
   "./config.js",
@@ -31,6 +37,12 @@ self.addEventListener("fetch", (event) => {
   // Ποτέ cache για Google APIs — μόνο για τα δικά μας στατικά αρχεία shell.
   if (url.origin !== self.location.origin) return;
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    fetch(event.request)
+      .then((response) => {
+        const copy = response.clone();
+        caches.open(HV_CACHE).then((cache) => cache.put(event.request, copy)).catch(() => {});
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
