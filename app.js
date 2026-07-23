@@ -1,6 +1,15 @@
 function $(id) { return document.getElementById(id); }
 
-const HV_SCREENS = ["screen-signin", "screen-folder", "screen-main", "screen-add-unit", "screen-add-attachment"];
+const HV_SCREENS = [
+  "screen-signin",
+  "screen-folder",
+  "screen-main",
+  "screen-add-unit",
+  "screen-add-attachment",
+  "screen-browse",
+  "screen-unit-detail",
+  "screen-task-detail",
+];
 
 function hvShowScreen(id) {
   HV_SCREENS.forEach((s) => {
@@ -286,6 +295,193 @@ $("btn-submit-attachment").onclick = async () => {
     $("btn-submit-attachment").disabled = false;
   }
 };
+
+// --- Προβολή / Αναζήτηση ---
+const hvStatusLabel = { pending: "Εκκρεμής", completed: "Ολοκληρωμένη" };
+const hvPriorityLabel = { low: "Χαμηλή", medium: "Μεσαία", high: "Υψηλή" };
+let hvBrowseTab = "units";
+let hvBrowseFrom = "screen-main";
+
+function hvGroupName(groupId) {
+  const snap = window.hvSnapshot || {};
+  const g = (snap.groups || []).find((x) => String(x.id) === String(groupId));
+  return g ? g.name : "";
+}
+
+function hvRenderBrowseList() {
+  const snap = window.hvSnapshot || {};
+  const q = $("browse-search").value.trim().toLowerCase();
+  const list = $("browse-list");
+  if (hvBrowseTab === "units") {
+    let units = snap.units || [];
+    if (q) units = units.filter((u) => `${u.name} ${u.location || ""} ${u.model || ""} ${u.serial_number || ""}`.toLowerCase().includes(q));
+    if (!units.length) {
+      list.innerHTML = '<p class="muted-note">Δεν βρέθηκαν μονάδες.</p>';
+      return;
+    }
+    list.innerHTML = units
+      .map(
+        (u) => `<div class="list-row" data-unit-id="${u.id}">
+          <div class="row-title">${hvEscapeHtml(u.name)}</div>
+          <div class="row-sub">${hvEscapeHtml(u.location || "—")}${hvGroupName(u.group_id) ? " · " + hvEscapeHtml(hvGroupName(u.group_id)) : ""}</div>
+          ${u.attachment_count ? `<div class="row-badges"><span class="badge att-count">📎 ${u.attachment_count}</span></div>` : ""}
+        </div>`
+      )
+      .join("");
+    list.querySelectorAll("[data-unit-id]").forEach((row) => {
+      row.onclick = () => hvOpenUnitDetail(row.dataset.unitId);
+    });
+  } else {
+    let tasks = snap.tasks || [];
+    if (q) tasks = tasks.filter((t) => `${t.description || ""} ${t.unit_name || ""} ${t.location_name || ""}`.toLowerCase().includes(q));
+    if (!tasks.length) {
+      list.innerHTML = '<p class="muted-note">Δεν βρέθηκαν εργασίες.</p>';
+      return;
+    }
+    list.innerHTML = tasks
+      .map(
+        (t) => `<div class="list-row" data-task-id="${t.id}">
+          <div class="row-title">${hvEscapeHtml(t.description || "(χωρίς περιγραφή)")}</div>
+          <div class="row-sub">${hvEscapeHtml(t.unit_name || "—")}${t.location_name ? " · " + hvEscapeHtml(t.location_name) : ""}</div>
+          <div class="row-badges">
+            <span class="badge status-${t.status}">${hvStatusLabel[t.status] || t.status}</span>
+            <span class="badge priority-${t.priority}">${hvPriorityLabel[t.priority] || t.priority || "—"}</span>
+          </div>
+        </div>`
+      )
+      .join("");
+    list.querySelectorAll("[data-task-id]").forEach((row) => {
+      row.onclick = () => hvOpenTaskDetail(row.dataset.taskId);
+    });
+  }
+}
+
+function hvOpenBrowse() {
+  hvBrowseTab = "units";
+  $("tab-units").classList.add("active");
+  $("tab-tasks").classList.remove("active");
+  $("browse-search").value = "";
+  hvShowScreen("screen-browse");
+  hvRenderBrowseList();
+}
+
+$("btn-browse").onclick = hvOpenBrowse;
+$("btn-browse-back").onclick = () => hvShowScreen("screen-main");
+$("tab-units").onclick = () => {
+  hvBrowseTab = "units";
+  $("tab-units").classList.add("active");
+  $("tab-tasks").classList.remove("active");
+  hvRenderBrowseList();
+};
+$("tab-tasks").onclick = () => {
+  hvBrowseTab = "tasks";
+  $("tab-tasks").classList.add("active");
+  $("tab-units").classList.remove("active");
+  hvRenderBrowseList();
+};
+$("browse-search").oninput = hvRenderBrowseList;
+
+function hvOpenUnitDetail(unitId) {
+  const snap = window.hvSnapshot || {};
+  const u = (snap.units || []).find((x) => String(x.id) === String(unitId));
+  if (!u) return;
+  window.hvCurrentUnit = u;
+  $("ud-name").textContent = u.name || "—";
+  $("ud-location").textContent = [u.location, hvGroupName(u.group_id)].filter(Boolean).join(" · ") || "—";
+  $("ud-model").textContent = u.model || "—";
+  $("ud-serial").textContent = u.serial_number || "—";
+  $("ud-attachments").textContent = u.attachment_count || 0;
+  if (u.notes) {
+    $("ud-notes-wrap").hidden = false;
+    $("ud-notes").textContent = u.notes;
+  } else {
+    $("ud-notes-wrap").hidden = true;
+  }
+  hvShowScreen("screen-unit-detail");
+}
+
+$("btn-unit-detail-back").onclick = () => hvShowScreen("screen-browse");
+
+$("btn-ud-add-attachment").onclick = () => {
+  const u = window.hvCurrentUnit;
+  if (!u) return;
+  hvOpenAddAttachmentFor("unit", u.id);
+};
+
+function hvOpenTaskDetail(taskId) {
+  const snap = window.hvSnapshot || {};
+  const t = (snap.tasks || []).find((x) => String(x.id) === String(taskId));
+  if (!t) return;
+  window.hvCurrentTask = t;
+  $("td-description").textContent = t.description || "(χωρίς περιγραφή)";
+  $("td-unit-location").textContent = [t.unit_name, t.location_name].filter(Boolean).join(" · ") || "—";
+  $("td-status-badge").textContent = hvStatusLabel[t.status] || t.status;
+  $("td-status-badge").className = "badge status-" + t.status;
+  $("td-priority-badge").textContent = hvPriorityLabel[t.priority] || t.priority || "—";
+  $("td-priority-badge").className = "badge priority-" + t.priority;
+  $("td-type").textContent = t.task_type_name || "—";
+  $("td-item").textContent = t.task_item_name || "—";
+  $("td-date").textContent = t.created_date ? new Date(t.created_date).toLocaleDateString("el-GR") : "—";
+  $("td-edit-description").value = t.description || "";
+  $("td-edit-notes").value = t.notes || "";
+  $("td-edit-priority").value = t.priority || "medium";
+  $("td-edit-status").value = t.status || "pending";
+  $("task-detail-status").textContent = "";
+  $("task-detail-status").className = "status";
+  hvShowScreen("screen-task-detail");
+}
+
+$("btn-task-detail-back").onclick = () => hvShowScreen("screen-browse");
+
+$("btn-td-save").onclick = async () => {
+  const t = window.hvCurrentTask;
+  const status = $("task-detail-status");
+  const token = hvGetValidToken();
+  const outboxId = window.hvOutboxId;
+  if (!t || !token || !outboxId) {
+    status.textContent = "Κάνε πρώτα ανανέωση στην κύρια οθόνη.";
+    status.className = "status error";
+    return;
+  }
+  const changes = {
+    description: $("td-edit-description").value.trim(),
+    notes: $("td-edit-notes").value.trim(),
+    priority: $("td-edit-priority").value,
+    status: $("td-edit-status").value,
+  };
+  $("btn-td-save").disabled = true;
+  status.textContent = "Αποστολή…";
+  status.className = "status";
+  try {
+    await hvSubmitTaskUpdate(token, outboxId, t.id, changes);
+    hvAddPendingLog({ kind: "task", text: `Ενημέρωση εργασίας: ${changes.description || t.description || "#" + t.id}` });
+    status.textContent = "✓ Στάλθηκε.";
+    status.className = "status ok";
+  } catch (err) {
+    status.textContent = "Σφάλμα: " + err.message;
+    status.className = "status error";
+  } finally {
+    $("btn-td-save").disabled = false;
+  }
+};
+
+$("btn-td-add-attachment").onclick = () => {
+  const t = window.hvCurrentTask;
+  if (!t) return;
+  hvOpenAddAttachmentFor("task", t.id);
+};
+
+function hvOpenAddAttachmentFor(type, realId) {
+  $("attachment-entity-type").value = type;
+  $("attachment-files").value = "";
+  $("add-attachment-status").textContent = "";
+  $("add-attachment-status").className = "status";
+  hvPopulateAttachmentEntitySelect();
+  const sel = $("attachment-entity");
+  const wanted = `real:${realId}`;
+  if ([...sel.options].some((o) => o.value === wanted)) sel.value = wanted;
+  hvShowScreen("screen-add-attachment");
+}
 
 (function hvBoot() {
   if ("serviceWorker" in navigator) {

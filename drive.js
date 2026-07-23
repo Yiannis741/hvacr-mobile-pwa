@@ -118,6 +118,15 @@ async function hvSubmitUnitCreate(token, outboxId, payload) {
   return id;
 }
 
+// Στέλνει αίτημα μερικής ενημέρωσης εργασίας (task.update) — status/priority/description/notes.
+async function hvSubmitTaskUpdate(token, outboxId, taskId, changes) {
+  const id = hvUuid();
+  const payload = { task_id: taskId, ...changes };
+  const request = { id, type: "task.update", payload, created_at: new Date().toISOString() };
+  await hvDriveUploadJSON(token, outboxId, `${id}.json`, request);
+  return id;
+}
+
 // Στέλνει αίτημα προσθήκης συνημμένου (attachment.add). Είτε entityId (υπάρχουσα
 // μονάδα/εργασία, όπως εμφανίζεται στο snapshot) είτε localUnitRef (μονάδα που μόλις
 // δημιουργήθηκε τοπικά και δεν έχει συγχρονιστεί ακόμα) — όχι και τα δύο.

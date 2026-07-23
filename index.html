@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1b6ef3">
+<meta name="theme-color" content="#ff7a45">
 <title>HVACR Mobile Sync</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
@@ -40,7 +40,8 @@
       <p id="main-status" class="status"></p>
     </div>
     <div class="card">
-      <button id="btn-add-unit">+ Προσθήκη μονάδας</button>
+      <button class="violet" id="btn-browse">Προβολή / Αναζήτηση</button>
+      <button id="btn-add-unit" style="margin-top:10px">+ Προσθήκη μονάδας</button>
       <button id="btn-add-attachment" style="margin-top:10px">+ Προσθήκη συνημμένου</button>
     </div>
     <div class="card" id="pending-card" hidden>
@@ -107,13 +108,90 @@
     </div>
   </section>
 
+  <section id="screen-browse" class="screen" hidden>
+    <div class="topbar">
+      <button class="icon-back" id="btn-browse-back">‹ Πίσω</button>
+      <h2>Προβολή / Αναζήτηση</h2>
+    </div>
+    <div class="tabs">
+      <button id="tab-units" class="active">Μονάδες</button>
+      <button id="tab-tasks">Εργασίες</button>
+    </div>
+    <div class="search-box">
+      <input type="text" id="browse-search" placeholder="Αναζήτηση…">
+    </div>
+    <div class="list" id="browse-list"></div>
+  </section>
+
+  <section id="screen-unit-detail" class="screen" hidden>
+    <div class="topbar">
+      <button class="icon-back" id="btn-unit-detail-back">‹ Πίσω</button>
+      <h2>Στοιχεία μονάδας</h2>
+    </div>
+    <div class="card">
+      <div class="detail-hero">
+        <h2 id="ud-name">—</h2>
+        <p id="ud-location">—</p>
+      </div>
+      <div class="kv"><span>Μοντέλο</span><span id="ud-model">—</span></div>
+      <div class="kv"><span>Serial Number</span><span id="ud-serial">—</span></div>
+      <div class="kv"><span>Συνημμένα</span><span id="ud-attachments">—</span></div>
+      <p id="ud-notes-wrap" hidden style="margin-top:12px"><span class="section-title">Σημειώσεις</span><br><span id="ud-notes" class="status" style="color:var(--text-dim)"></span></p>
+    </div>
+    <div class="card">
+      <button id="btn-ud-add-attachment">+ Προσθήκη συνημμένου σε αυτή τη μονάδα</button>
+    </div>
+  </section>
+
+  <section id="screen-task-detail" class="screen" hidden>
+    <div class="topbar">
+      <button class="icon-back" id="btn-task-detail-back">‹ Πίσω</button>
+      <h2>Στοιχεία εργασίας</h2>
+    </div>
+    <div class="card">
+      <div class="detail-hero">
+        <h2 id="td-description">—</h2>
+        <p id="td-unit-location">—</p>
+      </div>
+      <div class="row-badges" style="margin-top:6px">
+        <span id="td-status-badge" class="badge">—</span>
+        <span id="td-priority-badge" class="badge">—</span>
+      </div>
+      <div class="kv" style="margin-top:12px"><span>Τύπος</span><span id="td-type">—</span></div>
+      <div class="kv"><span>Είδος</span><span id="td-item">—</span></div>
+      <div class="kv"><span>Ημερομηνία</span><span id="td-date">—</span></div>
+    </div>
+    <div class="card">
+      <label>Περιγραφή</label>
+      <textarea id="td-edit-description"></textarea>
+      <label>Σημειώσεις</label>
+      <textarea id="td-edit-notes"></textarea>
+      <label>Προτεραιότητα</label>
+      <select id="td-edit-priority">
+        <option value="low">Χαμηλή</option>
+        <option value="medium">Μεσαία</option>
+        <option value="high">Υψηλή</option>
+      </select>
+      <label>Κατάσταση</label>
+      <select id="td-edit-status">
+        <option value="pending">Εκκρεμής</option>
+        <option value="completed">Ολοκληρωμένη</option>
+      </select>
+      <p id="task-detail-status" class="status"></p>
+      <button id="btn-td-save" style="margin-top:6px">Αποθήκευση αλλαγών</button>
+    </div>
+    <div class="card">
+      <button id="btn-td-add-attachment" class="secondary">+ Προσθήκη συνημμένου σε αυτή την εργασία</button>
+    </div>
+  </section>
+
 </main>
 
 <script src="https://apis.google.com/js/api.js" async defer></script>
-<script src="config.js?v=4"></script>
-<script src="auth.js?v=4"></script>
-<script src="picker.js?v=4"></script>
-<script src="drive.js?v=4"></script>
-<script src="app.js?v=4"></script>
+<script src="config.js?v=5"></script>
+<script src="auth.js?v=5"></script>
+<script src="picker.js?v=5"></script>
+<script src="drive.js?v=5"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
