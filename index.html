@@ -40,19 +40,80 @@
       <p id="main-status" class="status"></p>
     </div>
     <div class="card">
-      <p>Οι οθόνες προσθήκης μονάδας/συνημμένων έρχονται στο επόμενο βήμα.</p>
+      <button id="btn-add-unit">+ Προσθήκη μονάδας</button>
+      <button id="btn-add-attachment" style="margin-top:10px">+ Προσθήκη συνημμένου</button>
+    </div>
+    <div class="card" id="pending-card" hidden>
+      <p>Εκκρεμείς καταχωρήσεις σε αυτή τη συσκευή (θα εμφανιστούν στον υπολογιστή μετά τον επόμενο συγχρονισμό).</p>
+      <div class="pending-list" id="pending-list"></div>
+      <button class="secondary" id="btn-clear-pending" style="margin-top:12px">Καθαρισμός λίστας</button>
+    </div>
+    <div class="card">
       <button class="secondary" id="btn-change-folder">Αλλαγή φακέλου</button>
       <button class="danger" id="btn-signout" style="margin-top:10px">Αποσύνδεση</button>
+    </div>
+  </section>
+
+  <section id="screen-add-unit" class="screen" hidden>
+    <div class="card">
+      <label class="required">Όνομα μονάδας</label>
+      <input type="text" id="unit-name">
+
+      <label class="required">Τοποθεσία</label>
+      <select id="unit-location"></select>
+
+      <label class="required">Ομάδα</label>
+      <select id="unit-group"></select>
+
+      <label>Μοντέλο</label>
+      <input type="text" id="unit-model">
+
+      <label>Σειριακός αριθμός</label>
+      <input type="text" id="unit-serial">
+
+      <label>Ημερομηνία εγκατάστασης</label>
+      <input type="date" id="unit-installation-date">
+
+      <label>Σημειώσεις</label>
+      <textarea id="unit-notes"></textarea>
+
+      <p id="add-unit-status" class="status"></p>
+      <div class="button-row">
+        <button class="secondary" id="btn-cancel-add-unit">Άκυρο</button>
+        <button id="btn-submit-unit">Υποβολή</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-add-attachment" class="screen" hidden>
+    <div class="card">
+      <label class="required">Τύπος</label>
+      <select id="attachment-entity-type">
+        <option value="unit">Μονάδα</option>
+        <option value="task">Εργασία</option>
+      </select>
+
+      <label class="required" id="attachment-entity-label">Μονάδα</label>
+      <select id="attachment-entity"></select>
+
+      <label class="required">Αρχεία (φωτογραφίες, PDF)</label>
+      <input type="file" id="attachment-files" accept="image/*,application/pdf" multiple>
+
+      <p id="add-attachment-status" class="status"></p>
+      <div class="button-row">
+        <button class="secondary" id="btn-cancel-add-attachment">Άκυρο</button>
+        <button id="btn-submit-attachment">Υποβολή</button>
+      </div>
     </div>
   </section>
 
 </main>
 
 <script src="https://apis.google.com/js/api.js" async defer></script>
-<script src="config.js?v=3"></script>
-<script src="auth.js?v=3"></script>
-<script src="picker.js?v=3"></script>
-<script src="drive.js?v=3"></script>
-<script src="app.js?v=3"></script>
+<script src="config.js?v=4"></script>
+<script src="auth.js?v=4"></script>
+<script src="picker.js?v=4"></script>
+<script src="drive.js?v=4"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

@@ -18,3 +18,14 @@ button:disabled{opacity:.6;cursor:default}
 .kv:last-child{border-bottom:none}
 .kv span:first-child{color:var(--dim)}
 [hidden]{display:none!important}
+label{display:block;font-size:.85rem;color:var(--dim);margin:12px 0 6px}
+label:first-child{margin-top:0}
+input[type=text],input[type=date],input[type=file],select,textarea{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:.95rem;font-family:inherit}
+textarea{resize:vertical;min-height:70px}
+.required:after{content:" *";color:var(--red)}
+.button-row{display:flex;gap:10px;margin-top:16px}
+.button-row button{width:auto;flex:1}
+.pending-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.pending-item{font-size:.85rem;color:var(--dim);border-bottom:1px solid var(--border);padding-bottom:8px}
+.pending-item:last-child{border-bottom:none;padding-bottom:0}
+.pending-item .t{color:var(--text)}
