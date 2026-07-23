@@ -6,7 +6,7 @@
 // σύνδεση — το cache χρησιμεύει μόνο ως fallback όταν δεν υπάρχει δίκτυο.
 // Αν ποτέ χρειαστεί να αλλάξει η στρατηγική, ανέβασε και ΝΕΟ όνομα cache (HV_CACHE) —
 // αλλιώς οι φυλλομετρητές δεν ξαναβλέπουν καν αυτό το ίδιο το sw.js ως "αλλαγμένο".
-const HV_CACHE = "hvacr-shell-v2";
+const HV_CACHE = "hvacr-shell-v3";
 const HV_SHELL_FILES = [
   "./index.html",
   "./config.js",
@@ -20,7 +20,9 @@ const HV_SHELL_FILES = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(HV_CACHE).then((cache) => cache.addAll(HV_SHELL_FILES)).catch(() => {})
+    caches.open(HV_CACHE).then((cache) =>
+      Promise.all(HV_SHELL_FILES.map((url) => fetch(url, { cache: "reload" }).then((r) => cache.put(url, r)).catch(() => {})))
+    )
   );
   self.skipWaiting();
 });
@@ -37,7 +39,7 @@ self.addEventListener("fetch", (event) => {
   // Ποτέ cache για Google APIs — μόνο για τα δικά μας στατικά αρχεία shell.
   if (url.origin !== self.location.origin) return;
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: "no-store" })
       .then((response) => {
         const copy = response.clone();
         caches.open(HV_CACHE).then((cache) => cache.put(event.request, copy)).catch(() => {});
