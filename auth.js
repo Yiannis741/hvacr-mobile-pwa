@@ -1,56 +1,72 @@
-// Google Identity Services — απόκτηση OAuth access token (χωρίς redirect, client-side μόνο).
-let hvTokenClient = null;
-let hvAccessToken = null;
+// OAuth2 (implicit flow) μέσω πλήρους ανακατεύθυνσης σελίδας.
+// Δεν χρησιμοποιούμε popup (google.accounts.oauth2.initTokenClient) γιατί σε πολλά
+// mobile browsers το popup χάνει τη σύνδεση με τη σελίδα που το άνοιξε (window.opener)
+// και το access token δεν επιστρέφει ποτέ πίσω — προκαλώντας ατέρμονο loop στο sign-in.
+// Η πλήρης ανακατεύθυνση δουλεύει αξιόπιστα παντού.
+const HV_REDIRECT_URI = window.location.origin + window.location.pathname;
 
-function hvInitAuth() {
-  hvTokenClient = google.accounts.oauth2.initTokenClient({
+function hvBuildAuthUrl(state) {
+  const params = new URLSearchParams({
     client_id: window.HVACR_CONFIG.CLIENT_ID,
+    redirect_uri: HV_REDIRECT_URI,
+    response_type: "token",
     scope: window.HVACR_CONFIG.SCOPES,
-    callback: (resp) => {
-      if (resp.error) {
-        hvOnAuthError(resp.error);
-        return;
-      }
-      hvAccessToken = resp.access_token;
-      const expiresAt = Date.now() + (Number(resp.expires_in || 3500) * 1000) - 60000;
-      sessionStorage.setItem("hv_token", hvAccessToken);
-      sessionStorage.setItem("hv_token_expires", String(expiresAt));
-      hvOnAuthSuccess(hvAccessToken);
-    },
+    include_granted_scopes: "true",
+    prompt: "select_account",
+    state: state,
   });
+  return "https://accounts.google.com/o/oauth2/v2/auth?" + params.toString();
+}
+
+function hvSignIn() {
+  const state = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  sessionStorage.setItem("hv_oauth_state", state);
+  window.location.href = hvBuildAuthUrl(state);
 }
 
 function hvGetValidToken() {
   const tok = sessionStorage.getItem("hv_token");
   const exp = Number(sessionStorage.getItem("hv_token_expires") || 0);
-  if (tok && Date.now() < exp) {
-    hvAccessToken = tok;
-    return tok;
-  }
+  if (tok && Date.now() < exp) return tok;
   return null;
 }
 
-function hvSignIn(interactive) {
-  hvTokenClient.requestAccessToken({ prompt: interactive ? "consent" : "" });
+// Καλείται στην εκκίνηση της σελίδας. Αν μόλις επιστρέψαμε από τη Google (το access
+// token φτάνει στο URL fragment μετά την ανακατεύθυνση), το αποθηκεύει και καθαρίζει
+// το URL. Επιστρέφει το token, ή null αν δεν υπάρχει/απέτυχε.
+function hvConsumeAuthRedirect() {
+  const hash = window.location.hash ? window.location.hash.slice(1) : "";
+  if (!hash) return null;
+  const params = new URLSearchParams(hash);
+  const token = params.get("access_token");
+  const error = params.get("error");
+  if (!token && !error) return null;
+  history.replaceState(null, "", window.location.pathname + window.location.search);
+  if (error) {
+    window.hvLastAuthError = error;
+    return null;
+  }
+  const expectedState = sessionStorage.getItem("hv_oauth_state");
+  const state = params.get("state");
+  sessionStorage.removeItem("hv_oauth_state");
+  if (expectedState && state !== expectedState) {
+    window.hvLastAuthError = "Μη έγκυρη απάντηση σύνδεσης (state mismatch).";
+    return null;
+  }
+  const expiresIn = Number(params.get("expires_in") || 3500);
+  const expiresAt = Date.now() + expiresIn * 1000 - 60000;
+  sessionStorage.setItem("hv_token", token);
+  sessionStorage.setItem("hv_token_expires", String(expiresAt));
+  return token;
 }
 
 function hvSignOut() {
   const tok = hvGetValidToken();
-  if (tok && window.google && google.accounts && google.accounts.oauth2) {
-    google.accounts.oauth2.revoke(tok, () => {});
-  }
   sessionStorage.removeItem("hv_token");
   sessionStorage.removeItem("hv_token_expires");
   localStorage.removeItem("hv_folder_id");
   localStorage.removeItem("hv_folder_name");
-  hvAccessToken = null;
-}
-
-// Οι παρακάτω συναρτήσεις ορίζονται στο app.js — placeholders εδώ ώστε το auth.js
-// να μπορεί να φορτωθεί ανεξάρτητα χωρίς σφάλμα αν το app.js δεν έχει φορτώσει ακόμα.
-function hvOnAuthSuccess(token) {
-  if (window.onHvAuthSuccess) window.onHvAuthSuccess(token);
-}
-function hvOnAuthError(err) {
-  if (window.onHvAuthError) window.onHvAuthError(err);
+  if (tok) {
+    fetch("https://oauth2.googleapis.com/revoke?token=" + encodeURIComponent(tok), { method: "POST" }).catch(() => {});
+  }
 }

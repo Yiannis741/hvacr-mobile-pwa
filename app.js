@@ -6,26 +6,6 @@ function hvShowScreen(id) {
   });
 }
 
-function hvWaitFor(check, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    const start = Date.now();
-    (function poll() {
-      if (check()) return resolve();
-      if (Date.now() - start > timeoutMs) return reject(new Error("Timeout φόρτωσης Google script."));
-      setTimeout(poll, 100);
-    })();
-  });
-}
-
-let hvAuthReady = false;
-
-async function hvEnsureAuthReady() {
-  if (hvAuthReady) return;
-  await hvWaitFor(() => window.google && google.accounts && google.accounts.oauth2, 10000);
-  hvInitAuth();
-  hvAuthReady = true;
-}
-
 window.onHvAuthSuccess = function (token) {
   $("signin-status").textContent = "";
   const folderId = localStorage.getItem("hv_folder_id");
@@ -37,11 +17,6 @@ window.onHvAuthSuccess = function (token) {
   } else {
     hvShowScreen("screen-folder");
   }
-};
-
-window.onHvAuthError = function (err) {
-  $("signin-status").textContent = "Αποτυχία σύνδεσης: " + err;
-  $("signin-status").className = "status error";
 };
 
 async function hvRefreshData() {
@@ -70,18 +45,10 @@ async function hvRefreshData() {
   }
 }
 
-$("btn-signin").onclick = async () => {
-  $("btn-signin").disabled = true;
-  $("signin-status").textContent = "Σύνδεση…";
+$("btn-signin").onclick = () => {
+  $("signin-status").textContent = "Μεταφορά στη σύνδεση Google…";
   $("signin-status").className = "status";
-  try {
-    await hvEnsureAuthReady();
-    hvSignIn(true);
-  } catch (err) {
-    window.onHvAuthError(err.message);
-  } finally {
-    $("btn-signin").disabled = false;
-  }
+  hvSignIn();
 };
 
 $("btn-pick-folder").onclick = () => {
@@ -110,21 +77,19 @@ $("btn-signout").onclick = () => {
 
 $("btn-refresh").onclick = hvRefreshData;
 
-// Αρχική κατάσταση: αν υπάρχει ήδη έγκυρο token από προηγούμενη επίσκεψη (ίδια συνεδρία),
-// προχώρα κατευθείαν χωρίς να ζητηθεί ξανά σύνδεση.
-(async function hvBoot() {
+(function hvBoot() {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }
-  try {
-    await hvEnsureAuthReady();
-  } catch (err) {
-    // Google script άργησε να φορτώσει· ο χρήστης μπορεί ακόμα να πατήσει Σύνδεση αργότερα.
-  }
-  const existing = hvGetValidToken();
+  const fromRedirect = hvConsumeAuthRedirect();
+  const existing = fromRedirect || hvGetValidToken();
   if (existing) {
     window.onHvAuthSuccess(existing);
   } else {
+    if (window.hvLastAuthError) {
+      $("signin-status").textContent = "Αποτυχία σύνδεσης: " + window.hvLastAuthError;
+      $("signin-status").className = "status error";
+    }
     hvShowScreen("screen-signin");
   }
 })();
