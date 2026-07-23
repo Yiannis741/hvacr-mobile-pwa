@@ -1,0 +1,15 @@
+{
+  "name": "HVACR Mobile Sync",
+  "short_name": "HVACR",
+  "description": "Περιορισμένη έκδοση κινητού: προσθήκη μονάδων και συνημμένων, μέσω Google Drive.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f1115",
+  "theme_color": "#1b6ef3",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icons/icon.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

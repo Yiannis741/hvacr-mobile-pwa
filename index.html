@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b6ef3">
+<title>HVACR Mobile Sync</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon.svg">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header><h1>HVACR Mobile Sync</h1></header>
+<main>
+
+  <section id="screen-signin" class="screen">
+    <div class="card">
+      <p>Συνδέσου με τον Google λογαριασμό που έχει πρόσβαση στον κοινόχρηστο φάκελο συγχρονισμού.</p>
+      <button id="btn-signin">Σύνδεση με Google</button>
+      <p id="signin-status" class="status"></p>
+    </div>
+  </section>
+
+  <section id="screen-folder" class="screen" hidden>
+    <div class="card">
+      <p>Επίλεξε τον φάκελο Google Drive που χρησιμοποιεί ο υπολογιστής για τον συγχρονισμό (π.χ. HVACR-Maintenance-401). Χρειάζεται μόνο μία φορά.</p>
+      <button id="btn-pick-folder">Επιλογή φακέλου συγχρονισμού</button>
+      <p id="folder-status" class="status"></p>
+    </div>
+  </section>
+
+  <section id="screen-main" class="screen" hidden>
+    <div class="card">
+      <div class="kv"><span>Φάκελος</span><span id="info-folder-name">—</span></div>
+      <div class="kv"><span>Τελευταία ενημέρωση</span><span id="info-generated-at">—</span></div>
+      <div class="kv"><span>Μονάδες</span><span id="info-units-count">—</span></div>
+      <div class="kv"><span>Πρόσφατες εργασίες</span><span id="info-tasks-count">—</span></div>
+      <button id="btn-refresh" style="margin-top:14px">Ανανέωση</button>
+      <p id="main-status" class="status"></p>
+    </div>
+    <div class="card">
+      <p>Οι οθόνες προσθήκης μονάδας/συνημμένων έρχονται στο επόμενο βήμα.</p>
+      <button class="secondary" id="btn-change-folder">Αλλαγή φακέλου</button>
+      <button class="danger" id="btn-signout" style="margin-top:10px">Αποσύνδεση</button>
+    </div>
+  </section>
+
+</main>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="picker.js"></script>
+<script src="drive.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
