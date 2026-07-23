@@ -14,6 +14,7 @@ function hvOpenFolderPicker(token, onPicked) {
       .addView(view)
       .setOAuthToken(token)
       .setDeveloperKey(window.HVACR_CONFIG.API_KEY)
+      .setAppId(window.HVACR_CONFIG.PROJECT_NUMBER)
       .setCallback((data) => {
         if (data.action === google.picker.Action.PICKED) {
           const folder = data.docs[0];
