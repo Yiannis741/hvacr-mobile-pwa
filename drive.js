@@ -70,23 +70,6 @@ async function hvDriveUploadJSON(token, parentId, filename, obj) {
   return await r.json();
 }
 
-// Μετατροπή σε base64 μέσω FileReader (native, streaming) αντί για χειροκίνητο
-// arrayBuffer→string loop — το τελευταίο κρατάει στη μνήμη ταυτόχρονα το αρχικό ArrayBuffer
-// ΚΑΙ ένα ισομεγέθες JS string ΚΑΙ το τελικό base64 string, κάτι που έσκαγε ("χαμηλή μνήμη")
-// σε παλιά/αδύναμα κινητά με φωτογραφίες κάμερας αρκετών MB.
-function hvBlobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result || "";
-      const comma = result.indexOf(",");
-      resolve(comma >= 0 ? result.slice(comma + 1) : result);
-    };
-    reader.onerror = () => reject(reader.error || new Error("Αποτυχία ανάγνωσης αρχείου."));
-    reader.readAsDataURL(blob);
-  });
-}
-
 // Σμικρύνει/συμπιέζει φωτογραφίες πριν το ανέβασμα (μεγ. διάσταση 1600px, JPEG ~75%).
 // Οι σύγχρονες κάμερες κινητών βγάζουν φωτογραφίες 12-108MP. ΣΗΜΑΝΤΙΚΟ: περνάμε
 // resizeWidth/resizeHeight ΑΠΕΥΘΕΙΑΣ στο createImageBitmap ώστε ο browser να κάνει
@@ -152,23 +135,38 @@ async function hvCompressImageFile(file) {
   }
 }
 
+// ΣΗΜΑΝΤΙΚΟ (2η ρίζα του προβλήματος μνήμης): η παλιά υλοποίηση μετέτρεπε ΚΑΘΕ αρχείο
+// (φωτογραφία Ή pdf) σε base64 string και το "έραβε" μέσα σε ένα ακόμα μεγαλύτερο JS
+// string (το multipart body) πριν το στείλει — ένα pdf 2.8MB γινόταν ~3.8MB base64 string
+// μέσα σε ένα ~4MB+ multipart string, συν ό,τι επιπλέον χρειαζόταν το fetch για να το
+// κωδικοποιήσει σε bytes για δίκτυο. Σε πολύ αδύναμο κινητό αυτό έφτανε να σκάσει τη μνήμη
+// ΑΝΕΞΑΡΤΗΤΑ από συμπίεση εικόνας (γι' αυτό απέτυχε και σε pdf, που δεν περνάει καν από τη
+// συμπίεση εικόνων). Λύση: ανεβάζουμε το ΑΚΑΤΕΡΓΑΣΤΟ Blob/File απευθείας ως σώμα του fetch
+// — χωρίς base64, χωρίς string concatenation. Το Drive API v3 δεν υποστηρίζει να δώσεις
+// metadata (όνομα/φάκελο) ΚΑΙ raw binary body στο ίδιο request χωρίς multipart, οπότε
+// κάνουμε 2 βήματα: (1) δημιουργία του αρχείου με μόνο τα metadata, (2) PATCH με
+// uploadType=media για το περιεχόμενο, περνώντας το file object απευθείας ως body.
 async function hvDriveUploadBlob(token, parentId, filename, file) {
-  const boundary = "hvblob" + Math.random().toString(16).slice(2);
-  const metadata = { name: filename, parents: [parentId] };
-  const base64Data = await hvBlobToBase64(file);
-  const body = hvMultipartBody(
-    boundary,
-    metadata,
-    (file.type || "application/octet-stream") + "\r\nContent-Transfer-Encoding: base64",
-    base64Data
-  );
-  const r = await fetch(`${HV_UPLOAD_API}/files?uploadType=multipart&fields=id`, {
+  const createRes = await fetch(`${HV_DRIVE_API}/files?fields=id`, {
     method: "POST",
-    headers: { ...hvAuthHeaders(token), "Content-Type": `multipart/related; boundary=${boundary}` },
-    body,
+    headers: { ...hvAuthHeaders(token), "Content-Type": "application/json; charset=UTF-8" },
+    body: JSON.stringify({ name: filename, parents: [parentId] }),
   });
-  if (!r.ok) throw new Error("Αποτυχία αποστολής αρχείου στο Drive (" + r.status + ").");
-  return await r.json();
+  if (!createRes.ok) throw new Error("Αποτυχία δημιουργίας αρχείου στο Drive (" + createRes.status + ").");
+  const created = await createRes.json();
+  try {
+    const uploadRes = await fetch(`${HV_UPLOAD_API}/files/${created.id}?uploadType=media`, {
+      method: "PATCH",
+      headers: { ...hvAuthHeaders(token), "Content-Type": file.type || "application/octet-stream" },
+      body: file,
+    });
+    if (!uploadRes.ok) throw new Error("Αποτυχία αποστολής αρχείου στο Drive (" + uploadRes.status + ").");
+    return await uploadRes.json();
+  } catch (err) {
+    // Καθάρισμα: αν απέτυχε το ανέβασμα περιεχομένου, μη μείνει ορφανό άδειο αρχείο στο Drive.
+    fetch(`${HV_DRIVE_API}/files/${created.id}`, { method: "DELETE", headers: hvAuthHeaders(token) }).catch(() => {});
+    throw err;
+  }
 }
 
 function hvUuid() {
