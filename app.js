@@ -279,7 +279,7 @@ $("btn-submit-attachment").onclick = async () => {
   $("btn-submit-attachment").disabled = true;
   try {
     for (let i = 0; i < files.length; i++) {
-      status.textContent = `Αποστολή ${i + 1}/${files.length}…`;
+      status.textContent = `Συμπίεση & αποστολή ${i + 1}/${files.length}…`;
       status.className = "status";
       const file = files[i];
       await hvSubmitAttachment(token, outboxId, type, entityId, localUnitRef, file);

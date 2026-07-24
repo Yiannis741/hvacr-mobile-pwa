@@ -70,20 +70,65 @@ async function hvDriveUploadJSON(token, parentId, filename, obj) {
   return await r.json();
 }
 
-function hvArrayBufferToBase64(buffer) {
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+// Μετατροπή σε base64 μέσω FileReader (native, streaming) αντί για χειροκίνητο
+// arrayBuffer→string loop — το τελευταίο κρατάει στη μνήμη ταυτόχρονα το αρχικό ArrayBuffer
+// ΚΑΙ ένα ισομεγέθες JS string ΚΑΙ το τελικό base64 string, κάτι που έσκαγε ("χαμηλή μνήμη")
+// σε παλιά/αδύναμα κινητά με φωτογραφίες κάμερας αρκετών MB.
+function hvBlobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result || "";
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error || new Error("Αποτυχία ανάγνωσης αρχείου."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Σμικρύνει/συμπιέζει φωτογραφίες πριν το ανέβασμα (μεγ. διάσταση 1600px, JPEG ~75%).
+// Οι σύγχρονες κάμερες κινητών βγάζουν φωτογραφίες 8-20MP (αρκετά MB) — χωρίς αυτό το βήμα
+// η επεξεργασία τους σε αδύναμο κινητό μπορεί να εξαντλήσει τη μνήμη του browser tab.
+// Αρχεία που δεν είναι εικόνα (π.χ. PDF) ή είναι ήδη μικρά περνάνε χωρίς αλλαγή.
+const HV_IMAGE_MAX_DIM = 1600;
+const HV_IMAGE_QUALITY = 0.75;
+const HV_IMAGE_SKIP_BELOW_BYTES = 1.2 * 1024 * 1024;
+
+function hvIsCompressibleImage(file) {
+  return file && /^image\/(jpeg|png|webp)$/.test(file.type);
+}
+
+async function hvCompressImageFile(file) {
+  if (!hvIsCompressibleImage(file)) return file;
+  if (file.size < HV_IMAGE_SKIP_BELOW_BYTES) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const { width, height } = bitmap;
+    const scale = Math.min(1, HV_IMAGE_MAX_DIM / Math.max(width, height));
+    const outW = Math.max(1, Math.round(width * scale));
+    const outH = Math.max(1, Math.round(height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = outW;
+    canvas.height = outH;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(bitmap, 0, 0, outW, outH);
+    if (bitmap.close) bitmap.close();
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", HV_IMAGE_QUALITY));
+    if (!blob || blob.size >= file.size) return file;
+    const newName = file.name.replace(/\.\w+$/, "") + ".jpg";
+    return new File([blob], newName, { type: "image/jpeg" });
+  } catch (err) {
+    // Αν αποτύχει η συμπίεση (π.χ. πολύ παλιό browser χωρίς createImageBitmap),
+    // προχώρα με το αρχικό αρχείο αντί να μπλοκάρει η αποστολή.
+    return file;
   }
-  return btoa(binary);
 }
 
 async function hvDriveUploadBlob(token, parentId, filename, file) {
   const boundary = "hvblob" + Math.random().toString(16).slice(2);
   const metadata = { name: filename, parents: [parentId] };
-  const base64Data = hvArrayBufferToBase64(await file.arrayBuffer());
+  const base64Data = await hvBlobToBase64(file);
   const body = hvMultipartBody(
     boundary,
     metadata,
@@ -132,8 +177,9 @@ async function hvSubmitTaskUpdate(token, outboxId, taskId, changes) {
 // δημιουργήθηκε τοπικά και δεν έχει συγχρονιστεί ακόμα) — όχι και τα δύο.
 async function hvSubmitAttachment(token, outboxId, entityType, entityId, localUnitRef, file) {
   const id = hvUuid();
-  const blobName = `${id}_${file.name}`;
-  await hvDriveUploadBlob(token, outboxId, blobName, file);
+  const uploadFile = await hvCompressImageFile(file);
+  const blobName = `${id}_${uploadFile.name}`;
+  await hvDriveUploadBlob(token, outboxId, blobName, uploadFile);
   const payload = { entity_type: entityType, file: blobName };
   if (entityId) payload.entity_id = entityId;
   if (localUnitRef) payload.local_unit_ref = localUnitRef;
