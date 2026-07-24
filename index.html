@@ -95,7 +95,7 @@
       </select>
 
       <label class="required" id="attachment-entity-label">Μονάδα</label>
-      <select id="attachment-entity"></select>
+      <button type="button" class="secondary" id="btn-pick-entity" style="text-align:left">Επίλεξε…</button>
 
       <label class="required">Αρχεία (φωτογραφίες, PDF)</label>
       <input type="file" id="attachment-files" accept="image/*,application/pdf" multiple>
@@ -106,6 +106,17 @@
         <button id="btn-submit-attachment">Υποβολή</button>
       </div>
     </div>
+  </section>
+
+  <section id="screen-pick-entity" class="screen" hidden>
+    <div class="topbar">
+      <button class="icon-back" id="btn-pick-entity-back">‹ Πίσω</button>
+      <h2 id="pick-entity-title">Επιλογή μονάδας</h2>
+    </div>
+    <div class="search-box">
+      <input type="text" id="pick-entity-search" placeholder="Αναζήτηση…">
+    </div>
+    <div class="list" id="pick-entity-list"></div>
   </section>
 
   <section id="screen-browse" class="screen" hidden>
@@ -188,10 +199,10 @@
 </main>
 
 <script src="https://apis.google.com/js/api.js" async defer></script>
-<script src="config.js?v=9"></script>
-<script src="auth.js?v=9"></script>
-<script src="picker.js?v=9"></script>
-<script src="drive.js?v=9"></script>
-<script src="app.js?v=9"></script>
+<script src="config.js?v=10"></script>
+<script src="auth.js?v=10"></script>
+<script src="picker.js?v=10"></script>
+<script src="drive.js?v=10"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>

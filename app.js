@@ -6,6 +6,7 @@ const HV_SCREENS = [
   "screen-main",
   "screen-add-unit",
   "screen-add-attachment",
+  "screen-pick-entity",
   "screen-browse",
   "screen-unit-detail",
   "screen-task-detail",
@@ -215,38 +216,89 @@ $("btn-submit-unit").onclick = async () => {
 };
 
 // --- Προσθήκη συνημμένου ---
-function hvPopulateAttachmentEntitySelect() {
+// Η επιλογή μονάδας/εργασίας ήταν ένα native <select> με όλες τις μονάδες μέσα (70+),
+// δύσχρηστο σε κινητό χωρίς φιλτράρισμα. Αντικαταστάθηκε από ένα ξεχωριστό οθόνη-picker
+// με αναζήτηση, ίδιο μοτίβο με το "Προβολή/Αναζήτηση". Η τρέχουσα επιλογή κρατιέται στο
+// window.hvSelectedEntity = { value: "real:<id>"|"local:<id>", label: "..." }.
+window.hvSelectedEntity = null;
+
+function hvResetAttachmentEntitySelection() {
   const type = $("attachment-entity-type").value;
-  const sel = $("attachment-entity");
-  const snap = window.hvSnapshot || {};
   $("attachment-entity-label").textContent = type === "task" ? "Εργασία" : "Μονάδα";
-  let options = [];
-  if (type === "unit") {
-    const pendingUnits = hvPendingUnits().map(
-      (e) => `<option value="local:${e.localId}">(εκκρεμεί συγχρονισμός) ${hvEscapeHtml(e.text.replace(/^Νέα μονάδα:\s*/, ""))}</option>`
-    );
-    const realUnits = (snap.units || []).map(
-      (u) => `<option value="real:${u.id}">${hvEscapeHtml(u.name)}${u.location ? " — " + hvEscapeHtml(u.location) : ""}</option>`
-    );
-    options = pendingUnits.concat(realUnits);
-  } else {
-    options = (snap.tasks || []).map(
-      (t) => `<option value="real:${t.id}">${hvEscapeHtml(t.description || "(χωρίς περιγραφή)")}${t.unit_name ? " — " + hvEscapeHtml(t.unit_name) : ""}</option>`
-    );
-  }
-  sel.innerHTML = options.length ? options.join("") : '<option value="">— Δεν υπάρχουν διαθέσιμα —</option>';
+  window.hvSelectedEntity = null;
+  $("btn-pick-entity").textContent = "Επίλεξε…";
 }
+
+function hvBuildEntityOptions(type) {
+  const snap = window.hvSnapshot || {};
+  if (type === "unit") {
+    const pendingUnits = hvPendingUnits().map((e) => ({
+      value: `local:${e.localId}`,
+      label: "(εκκρεμεί συγχρονισμός) " + e.text.replace(/^Νέα μονάδα:\s*/, ""),
+      sub: "",
+    }));
+    const realUnits = (snap.units || []).map((u) => ({
+      value: `real:${u.id}`,
+      label: u.name,
+      sub: [u.location, hvGroupName(u.group_id)].filter(Boolean).join(" · "),
+    }));
+    return pendingUnits.concat(realUnits);
+  }
+  return (snap.tasks || []).map((t) => ({
+    value: `real:${t.id}`,
+    label: t.description || "(χωρίς περιγραφή)",
+    sub: [t.unit_name, t.location_name].filter(Boolean).join(" · "),
+  }));
+}
+
+function hvRenderPickEntityList() {
+  const type = $("attachment-entity-type").value;
+  const q = $("pick-entity-search").value.trim().toLowerCase();
+  const list = $("pick-entity-list");
+  let options = hvBuildEntityOptions(type);
+  if (q) options = options.filter((o) => `${o.label} ${o.sub}`.toLowerCase().includes(q));
+  if (!options.length) {
+    list.innerHTML = '<p class="muted-note">Δεν βρέθηκαν αποτελέσματα.</p>';
+    return;
+  }
+  list.innerHTML = options
+    .map(
+      (o, i) => `<div class="list-row" data-idx="${i}">
+        <div class="row-title">${hvEscapeHtml(o.label)}</div>
+        ${o.sub ? `<div class="row-sub">${hvEscapeHtml(o.sub)}</div>` : ""}
+      </div>`
+    )
+    .join("");
+  list.querySelectorAll("[data-idx]").forEach((row) => {
+    row.onclick = () => {
+      const o = options[Number(row.dataset.idx)];
+      window.hvSelectedEntity = { value: o.value, label: o.label };
+      $("btn-pick-entity").textContent = o.label;
+      hvShowScreen("screen-add-attachment");
+    };
+  });
+}
+
+$("btn-pick-entity").onclick = () => {
+  const type = $("attachment-entity-type").value;
+  $("pick-entity-title").textContent = type === "task" ? "Επιλογή εργασίας" : "Επιλογή μονάδας";
+  $("pick-entity-search").value = "";
+  hvShowScreen("screen-pick-entity");
+  hvRenderPickEntityList();
+};
+$("pick-entity-search").oninput = hvRenderPickEntityList;
+$("btn-pick-entity-back").onclick = () => hvShowScreen("screen-add-attachment");
 
 $("btn-add-attachment").onclick = () => {
   $("attachment-entity-type").value = "unit";
   $("attachment-files").value = "";
   $("add-attachment-status").textContent = "";
   $("add-attachment-status").className = "status";
-  hvPopulateAttachmentEntitySelect();
+  hvResetAttachmentEntitySelection();
   hvShowScreen("screen-add-attachment");
 };
 
-$("attachment-entity-type").onchange = hvPopulateAttachmentEntitySelect;
+$("attachment-entity-type").onchange = hvResetAttachmentEntitySelection;
 
 $("btn-cancel-add-attachment").onclick = () => hvShowScreen("screen-main");
 
@@ -255,14 +307,14 @@ $("btn-submit-attachment").onclick = async () => {
   const token = hvGetValidToken();
   const outboxId = window.hvOutboxId;
   const type = $("attachment-entity-type").value;
-  const entityVal = $("attachment-entity").value;
+  const selected = window.hvSelectedEntity;
   const files = $("attachment-files").files;
   if (!token || !outboxId) {
     status.textContent = "Κάνε πρώτα ανανέωση στην κύρια οθόνη.";
     status.className = "status error";
     return;
   }
-  if (!entityVal) {
+  if (!selected) {
     status.textContent = "Επίλεξε μονάδα ή εργασία.";
     status.className = "status error";
     return;
@@ -272,10 +324,10 @@ $("btn-submit-attachment").onclick = async () => {
     status.className = "status error";
     return;
   }
-  const [kind, rawId] = entityVal.split(":");
+  const [kind, rawId] = selected.value.split(":");
   const entityId = kind === "real" ? rawId : null;
   const localUnitRef = kind === "local" ? rawId : null;
-  const entityLabel = $("attachment-entity").selectedOptions[0].textContent;
+  const entityLabel = selected.label;
   $("btn-submit-attachment").disabled = true;
   try {
     for (let i = 0; i < files.length; i++) {
@@ -476,10 +528,14 @@ function hvOpenAddAttachmentFor(type, realId) {
   $("attachment-files").value = "";
   $("add-attachment-status").textContent = "";
   $("add-attachment-status").className = "status";
-  hvPopulateAttachmentEntitySelect();
-  const sel = $("attachment-entity");
-  const wanted = `real:${realId}`;
-  if ([...sel.options].some((o) => o.value === wanted)) sel.value = wanted;
+  $("attachment-entity-label").textContent = type === "task" ? "Εργασία" : "Μονάδα";
+  const option = hvBuildEntityOptions(type).find((o) => o.value === `real:${realId}`);
+  if (option) {
+    window.hvSelectedEntity = { value: option.value, label: option.label };
+    $("btn-pick-entity").textContent = option.label;
+  } else {
+    hvResetAttachmentEntitySelection();
+  }
   hvShowScreen("screen-add-attachment");
 }
 
