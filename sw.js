@@ -6,7 +6,7 @@
 // σύνδεση — το cache χρησιμεύει μόνο ως fallback όταν δεν υπάρχει δίκτυο.
 // Αν ποτέ χρειαστεί να αλλάξει η στρατηγική, ανέβασε και ΝΕΟ όνομα cache (HV_CACHE) —
 // αλλιώς οι φυλλομετρητές δεν ξαναβλέπουν καν αυτό το ίδιο το sw.js ως "αλλαγμένο".
-const HV_CACHE = "hvacr-shell-v7";
+const HV_CACHE = "hvacr-shell-v8";
 const HV_SHELL_FILES = [
   "./index.html",
   "./config.js",

@@ -88,12 +88,24 @@ function hvBlobToBase64(blob) {
 }
 
 // Σμικρύνει/συμπιέζει φωτογραφίες πριν το ανέβασμα (μεγ. διάσταση 1600px, JPEG ~75%).
-// Οι σύγχρονες κάμερες κινητών βγάζουν φωτογραφίες 8-20MP (αρκετά MB) — χωρίς αυτό το βήμα
-// η επεξεργασία τους σε αδύναμο κινητό μπορεί να εξαντλήσει τη μνήμη του browser tab.
+// Οι σύγχρονες κάμερες κινητών βγάζουν φωτογραφίες 12-108MP. ΣΗΜΑΝΤΙΚΟ: περνάμε
+// resizeWidth/resizeHeight ΑΠΕΥΘΕΙΑΣ στο createImageBitmap ώστε ο browser να κάνει
+// "scaled decode" στο μέγεθος-στόχο κατά την αποκωδικοποίηση της εικόνας. Η πρώτη έκδοση
+// αυτής της συνάρτησης έκανε createImageBitmap(file) ΧΩΡΙΣ resize options — δηλαδή
+// αποκωδικοποιούσε πρώτα ΟΛΟΚΛΗΡΗ τη φωτογραφία σε πλήρη ανάλυση (π.χ. μια φωτογραφία
+// 4000x3000 = 48MB raw pixels, μια 108MP φωτογραφία = ~430MB) ΚΑΙ ΜΕΤΑ τη σμίκρυνε με
+// canvas — αυτό το πρώτο, ακριβό βήμα ήταν που έσκαγε τη μνήμη σε αδύναμα κινητά, ακόμα
+// και μετά τη βελτίωση του base64 encoding. Με resizeWidth/resizeHeight ο αποκωδικοποιητής
+// (π.χ. libjpeg στο Chrome/Android) μπορεί να κάνει scaled/DCT decode απευθείας στο μικρό
+// μέγεθος, χωρίς ποτέ να χρειαστεί να κρατήσει την πλήρη ανάλυση στη μνήμη.
 // Αρχεία που δεν είναι εικόνα (π.χ. PDF) ή είναι ήδη μικρά περνάνε χωρίς αλλαγή.
 const HV_IMAGE_MAX_DIM = 1600;
 const HV_IMAGE_QUALITY = 0.75;
 const HV_IMAGE_SKIP_BELOW_BYTES = 1.2 * 1024 * 1024;
+// Αν η "συμπιεσμένη" έξοδος είναι ακόμα πάνω από αυτό, κάτι πήγε στραβά (π.χ. πολύ παλιό
+// browser χωρίς υποστήριξη resize) — καλύτερα σαφές μήνυμα λάθους παρά τυφλή αποστολή
+// ενός τεράστιου αρχείου που θα ξανασκάσει τη μνήμη στο επόμενο βήμα.
+const HV_IMAGE_HARD_LIMIT_BYTES = 6 * 1024 * 1024;
 
 function hvIsCompressibleImage(file) {
   return file && /^image\/(jpeg|png|webp)$/.test(file.type);
@@ -102,25 +114,40 @@ function hvIsCompressibleImage(file) {
 async function hvCompressImageFile(file) {
   if (!hvIsCompressibleImage(file)) return file;
   if (file.size < HV_IMAGE_SKIP_BELOW_BYTES) return file;
+  let bitmap;
   try {
-    const bitmap = await createImageBitmap(file);
-    const { width, height } = bitmap;
-    const scale = Math.min(1, HV_IMAGE_MAX_DIM / Math.max(width, height));
-    const outW = Math.max(1, Math.round(width * scale));
-    const outH = Math.max(1, Math.round(height * scale));
+    bitmap = await createImageBitmap(file, {
+      resizeWidth: HV_IMAGE_MAX_DIM,
+      resizeQuality: "medium",
+    });
+  } catch (err) {
+    bitmap = null;
+  }
+  if (!bitmap) {
+    // Πολύ παλιό browser χωρίς υποστήριξη resize options στο createImageBitmap.
+    if (file.size > HV_IMAGE_HARD_LIMIT_BYTES) {
+      throw new Error("Η φωτογραφία είναι πολύ μεγάλη για αυτή τη συσκευή. Δοκίμασε μικρότερη ανάλυση κάμερας ή σμίκρυνέ την πριν την προσθέσεις.");
+    }
+    return file;
+  }
+  try {
     const canvas = document.createElement("canvas");
-    canvas.width = outW;
-    canvas.height = outH;
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
     const ctx = canvas.getContext("2d");
-    ctx.drawImage(bitmap, 0, 0, outW, outH);
+    ctx.drawImage(bitmap, 0, 0);
     if (bitmap.close) bitmap.close();
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", HV_IMAGE_QUALITY));
-    if (!blob || blob.size >= file.size) return file;
+    if (!blob) {
+      if (file.size > HV_IMAGE_HARD_LIMIT_BYTES) throw new Error("Αποτυχία συμπίεσης φωτογραφίας.");
+      return file;
+    }
+    if (blob.size >= file.size) return file;
     const newName = file.name.replace(/\.\w+$/, "") + ".jpg";
     return new File([blob], newName, { type: "image/jpeg" });
   } catch (err) {
-    // Αν αποτύχει η συμπίεση (π.χ. πολύ παλιό browser χωρίς createImageBitmap),
-    // προχώρα με το αρχικό αρχείο αντί να μπλοκάρει η αποστολή.
+    if (bitmap && bitmap.close) bitmap.close();
+    if (file.size > HV_IMAGE_HARD_LIMIT_BYTES) throw err;
     return file;
   }
 }
