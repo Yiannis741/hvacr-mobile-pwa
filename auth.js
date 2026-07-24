@@ -24,9 +24,15 @@ function hvSignIn() {
   window.location.href = hvBuildAuthUrl(state);
 }
 
+// ΣΗΜΑΝΤΙΚΟ: το access token αποθηκεύεται σε localStorage (όχι sessionStorage). Όταν
+// ανοίγει η κάμερα του κινητού για νέα φωτογραφία, το Android μπορεί να σκοτώσει τη
+// διεργασία του Chrome tab για να ελευθερώσει μνήμη (φυσιολογικό σε αδύναμα κινητά — εκτός
+// ελέγχου του web app). Με sessionStorage αυτό σήμαινε πλήρη αποσύνδεση κάθε φορά (χαμένο
+// token, ξανά Google login/consent). Με localStorage το token επιβιώνει και ο χρήστης απλά
+// βλέπει την κύρια οθόνη ήδη συνδεδεμένη μετά την επιστροφή, χωρίς νέο login.
 function hvGetValidToken() {
-  const tok = sessionStorage.getItem("hv_token");
-  const exp = Number(sessionStorage.getItem("hv_token_expires") || 0);
+  const tok = localStorage.getItem("hv_token");
+  const exp = Number(localStorage.getItem("hv_token_expires") || 0);
   if (tok && Date.now() < exp) return tok;
   return null;
 }
@@ -55,15 +61,15 @@ function hvConsumeAuthRedirect() {
   }
   const expiresIn = Number(params.get("expires_in") || 3500);
   const expiresAt = Date.now() + expiresIn * 1000 - 60000;
-  sessionStorage.setItem("hv_token", token);
-  sessionStorage.setItem("hv_token_expires", String(expiresAt));
+  localStorage.setItem("hv_token", token);
+  localStorage.setItem("hv_token_expires", String(expiresAt));
   return token;
 }
 
 function hvSignOut() {
   const tok = hvGetValidToken();
-  sessionStorage.removeItem("hv_token");
-  sessionStorage.removeItem("hv_token_expires");
+  localStorage.removeItem("hv_token");
+  localStorage.removeItem("hv_token_expires");
   localStorage.removeItem("hv_folder_id");
   localStorage.removeItem("hv_folder_name");
   if (tok) {
