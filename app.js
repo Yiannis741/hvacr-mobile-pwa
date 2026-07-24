@@ -229,6 +229,18 @@ function hvResetAttachmentEntitySelection() {
   $("btn-pick-entity").textContent = "Επίλεξε…";
 }
 
+function hvUnitLocationName(u) {
+  return u.location || "Χωρίς τοποθεσία";
+}
+function hvUnitGroupName(u) {
+  const snap = window.hvSnapshot || {};
+  const g = (snap.groups || []).find((x) => String(x.id) === String(u.group_id));
+  return g ? g.name : "Χωρίς ομάδα";
+}
+
+// Επίπεδη λίστα όλων των επιλογών (χρησιμοποιείται στην αναζήτηση, που παρακάμπτει
+// την ιεραρχία, και όταν χρειάζεται να βρεθεί απευθείας ένα συγκεκριμένο real:id —
+// π.χ. από τα κουμπιά "+ Προσθήκη συνημμένου" μέσα σε μονάδα/εργασία).
 function hvBuildEntityOptions(type) {
   const snap = window.hvSnapshot || {};
   if (type === "unit") {
@@ -240,7 +252,7 @@ function hvBuildEntityOptions(type) {
     const realUnits = (snap.units || []).map((u) => ({
       value: `real:${u.id}`,
       label: u.name,
-      sub: [u.location, hvGroupName(u.group_id)].filter(Boolean).join(" · "),
+      sub: [hvUnitLocationName(u), hvUnitGroupName(u)].filter(Boolean).join(" · "),
     }));
     return pendingUnits.concat(realUnits);
   }
@@ -251,43 +263,231 @@ function hvBuildEntityOptions(type) {
   }));
 }
 
-function hvRenderPickEntityList() {
-  const type = $("attachment-entity-type").value;
-  const q = $("pick-entity-search").value.trim().toLowerCase();
+// --- Ιεραρχικό picker: Τοποθεσία → Ομάδα → Μονάδα (για συνημμένο σε μονάδα),
+// ή Τοποθεσία → Μονάδα → Εργασία (για συνημμένο σε υπάρχουσα εργασία) — αντί για μία
+// επίπεδη λίστα 70+ μονάδων, που δημιουργούσε clutter ακόμα και με αναζήτηση.
+window.hvPickLevel = "locations";
+window.hvPickLocation = null;
+window.hvPickGroup = null;
+window.hvPickUnit = null;
+
+function hvRenderPickRows(rows) {
   const list = $("pick-entity-list");
-  let options = hvBuildEntityOptions(type);
-  if (q) options = options.filter((o) => `${o.label} ${o.sub}`.toLowerCase().includes(q));
-  if (!options.length) {
+  if (!rows.length) {
     list.innerHTML = '<p class="muted-note">Δεν βρέθηκαν αποτελέσματα.</p>';
     return;
   }
-  list.innerHTML = options
+  list.innerHTML = rows
     .map(
-      (o, i) => `<div class="list-row" data-idx="${i}">
-        <div class="row-title">${hvEscapeHtml(o.label)}</div>
-        ${o.sub ? `<div class="row-sub">${hvEscapeHtml(o.sub)}</div>` : ""}
+      (r, i) => `<div class="list-row" data-idx="${i}">
+        <div class="row-title">${hvEscapeHtml(r.label)}</div>
+        ${r.sub ? `<div class="row-sub">${hvEscapeHtml(String(r.sub))}</div>` : ""}
       </div>`
     )
     .join("");
   list.querySelectorAll("[data-idx]").forEach((row) => {
-    row.onclick = () => {
-      const o = options[Number(row.dataset.idx)];
-      window.hvSelectedEntity = { value: o.value, label: o.label };
-      $("btn-pick-entity").textContent = o.label;
-      hvShowScreen("screen-add-attachment");
-    };
+    row.onclick = () => rows[Number(row.dataset.idx)].onSelect();
   });
 }
 
-$("btn-pick-entity").onclick = () => {
+function hvSelectPickedEntity(o) {
+  window.hvSelectedEntity = { value: o.value, label: o.label };
+  $("btn-pick-entity").textContent = o.label;
+  hvShowScreen("screen-add-attachment");
+}
+
+function hvPickEntityTitle() {
   const type = $("attachment-entity-type").value;
-  $("pick-entity-title").textContent = type === "task" ? "Επιλογή εργασίας" : "Επιλογή μονάδας";
+  const level = window.hvPickLevel;
+  if (level === "locations") return "Επιλογή τοποθεσίας";
+  if (level === "pending") return "Εκκρεμείς μονάδες";
+  if (level === "groups") return "Ομάδα — " + window.hvPickLocation.name;
+  if (level === "units" && type === "unit") return "Μονάδα — " + window.hvPickLocation.name + " · " + window.hvPickGroup.name;
+  if (level === "units" && type === "task") return "Μονάδα — " + window.hvPickLocation.name;
+  if (level === "tasks") return "Εργασία — " + window.hvPickUnit.name;
+  return "Επιλογή";
+}
+
+function hvRenderPickEntityList() {
+  const type = $("attachment-entity-type").value;
+  const q = $("pick-entity-search").value.trim().toLowerCase();
+  $("pick-entity-title").textContent = hvPickEntityTitle();
+  const snap = window.hvSnapshot || {};
+
+  // Αναζήτηση: παρακάμπτει την ιεραρχία, επίπεδη λίστα φιλτραρισμένη σε όλα.
+  if (q) {
+    const options = hvBuildEntityOptions(type).filter((o) => `${o.label} ${o.sub}`.toLowerCase().includes(q));
+    hvRenderPickRows(options.map((o) => ({ label: o.label, sub: o.sub, onSelect: () => hvSelectPickedEntity(o) })));
+    return;
+  }
+
+  const byLocale = (a, b) => a.localeCompare(b, "el");
+
+  if (window.hvPickLevel === "locations") {
+    const counts = {};
+    if (type === "unit") {
+      (snap.units || []).forEach((u) => {
+        const name = hvUnitLocationName(u);
+        counts[name] = (counts[name] || 0) + 1;
+      });
+    } else {
+      (snap.tasks || []).forEach((t) => {
+        const name = t.location_name || "Χωρίς τοποθεσία";
+        counts[name] = (counts[name] || 0) + 1;
+      });
+    }
+    const rows = Object.keys(counts)
+      .sort(byLocale)
+      .map((name) => ({
+        label: name,
+        sub: type === "unit" ? `${counts[name]} μονάδες` : `${counts[name]} εργασίες`,
+        onSelect: () => {
+          window.hvPickLocation = { name };
+          window.hvPickLevel = type === "unit" ? "groups" : "units";
+          hvRenderPickEntityList();
+        },
+      }));
+    if (type === "unit") {
+      const pendingCount = hvPendingUnits().length;
+      if (pendingCount) {
+        rows.unshift({
+          label: "Εκκρεμείς (νέες, μη συγχρονισμένες)",
+          sub: `${pendingCount}`,
+          onSelect: () => {
+            window.hvPickLevel = "pending";
+            hvRenderPickEntityList();
+          },
+        });
+      }
+    }
+    hvRenderPickRows(rows);
+    return;
+  }
+
+  if (window.hvPickLevel === "pending") {
+    const rows = hvPendingUnits().map((e) => {
+      const label = "(εκκρεμεί συγχρονισμός) " + e.text.replace(/^Νέα μονάδα:\s*/, "");
+      return { label, sub: "", onSelect: () => hvSelectPickedEntity({ value: `local:${e.localId}`, label }) };
+    });
+    hvRenderPickRows(rows);
+    return;
+  }
+
+  if (window.hvPickLevel === "groups") {
+    const counts = {};
+    (snap.units || [])
+      .filter((u) => hvUnitLocationName(u) === window.hvPickLocation.name)
+      .forEach((u) => {
+        const name = hvUnitGroupName(u);
+        counts[name] = (counts[name] || 0) + 1;
+      });
+    const rows = Object.keys(counts)
+      .sort(byLocale)
+      .map((name) => ({
+        label: name,
+        sub: `${counts[name]} μονάδες`,
+        onSelect: () => {
+          window.hvPickGroup = { name };
+          window.hvPickLevel = "units";
+          hvRenderPickEntityList();
+        },
+      }));
+    hvRenderPickRows(rows);
+    return;
+  }
+
+  if (window.hvPickLevel === "units" && type === "unit") {
+    const units = (snap.units || []).filter(
+      (u) => hvUnitLocationName(u) === window.hvPickLocation.name && hvUnitGroupName(u) === window.hvPickGroup.name
+    );
+    const rows = units.map((u) => ({
+      label: u.name,
+      sub: u.model || "",
+      onSelect: () => hvSelectPickedEntity({ value: `real:${u.id}`, label: u.name }),
+    }));
+    hvRenderPickRows(rows);
+    return;
+  }
+
+  if (window.hvPickLevel === "units" && type === "task") {
+    const counts = {};
+    (snap.tasks || [])
+      .filter((t) => (t.location_name || "Χωρίς τοποθεσία") === window.hvPickLocation.name)
+      .forEach((t) => {
+        const name = t.unit_name || "Χωρίς μονάδα";
+        counts[name] = (counts[name] || 0) + 1;
+      });
+    const rows = Object.keys(counts)
+      .sort(byLocale)
+      .map((name) => ({
+        label: name,
+        sub: `${counts[name]} εργασίες`,
+        onSelect: () => {
+          window.hvPickUnit = { name };
+          window.hvPickLevel = "tasks";
+          hvRenderPickEntityList();
+        },
+      }));
+    hvRenderPickRows(rows);
+    return;
+  }
+
+  if (window.hvPickLevel === "tasks") {
+    const tasks = (snap.tasks || []).filter(
+      (t) =>
+        (t.location_name || "Χωρίς τοποθεσία") === window.hvPickLocation.name &&
+        (t.unit_name || "Χωρίς μονάδα") === window.hvPickUnit.name
+    );
+    const rows = tasks.map((t) => {
+      const label = t.description || "(χωρίς περιγραφή)";
+      return {
+        label,
+        sub: hvStatusLabel[t.status] || t.status,
+        onSelect: () => hvSelectPickedEntity({ value: `real:${t.id}`, label }),
+      };
+    });
+    hvRenderPickRows(rows);
+  }
+}
+
+$("btn-pick-entity").onclick = () => {
+  window.hvPickLevel = "locations";
+  window.hvPickLocation = null;
+  window.hvPickGroup = null;
+  window.hvPickUnit = null;
   $("pick-entity-search").value = "";
   hvShowScreen("screen-pick-entity");
   hvRenderPickEntityList();
 };
 $("pick-entity-search").oninput = hvRenderPickEntityList;
-$("btn-pick-entity-back").onclick = () => hvShowScreen("screen-add-attachment");
+$("btn-pick-entity-back").onclick = () => {
+  const type = $("attachment-entity-type").value;
+  if ($("pick-entity-search").value.trim()) {
+    $("pick-entity-search").value = "";
+    hvRenderPickEntityList();
+    return;
+  }
+  const level = window.hvPickLevel;
+  if (level === "pending") {
+    window.hvPickLevel = "locations";
+  } else if (level === "groups") {
+    window.hvPickLevel = "locations";
+    window.hvPickLocation = null;
+  } else if (level === "units" && type === "unit") {
+    window.hvPickLevel = "groups";
+    window.hvPickGroup = null;
+  } else if (level === "units" && type === "task") {
+    window.hvPickLevel = "locations";
+    window.hvPickLocation = null;
+  } else if (level === "tasks") {
+    window.hvPickLevel = "units";
+    window.hvPickUnit = null;
+  } else {
+    hvShowScreen("screen-add-attachment");
+    return;
+  }
+  hvRenderPickEntityList();
+};
 
 $("btn-add-attachment").onclick = () => {
   $("attachment-entity-type").value = "unit";
