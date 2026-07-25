@@ -244,9 +244,22 @@ function hvResetAttachQueue() {
   hvRenderAttachQueue();
 }
 
+// Η ουρά μπορεί πλέον να περιέχει αρχεία για ΠΕΡΙΣΣΟΤΕΡΕΣ ΑΠΟ ΜΙΑ μονάδες/εργασίες
+// ταυτόχρονα (κάθε στοιχείο "θυμάται" σε ποιον προορισμό ανήκει, με entityType/
+// entityValue/entityLabel αποθηκευμένα ΤΗ ΣΤΙΓΜΗ που προστέθηκε). Η προβολή τα ομαδοποιεί
+// ανά προορισμό με επικεφαλίδα, ώστε να είναι σαφές τι θα σταλεί και πού.
+function hvAttachQueueSummary() {
+  const queue = window.hvAttachQueue;
+  const targets = new Set(queue.map((i) => i.entityType + ":" + i.entityValue));
+  const fileWord = queue.length === 1 ? "αρχείο" : "αρχεία";
+  const targetWord = targets.size === 1 ? "προορισμό" : "προορισμούς";
+  return `${queue.length} ${fileWord} · ${targets.size} ${targetWord}`;
+}
+
 function hvRenderAttachQueue() {
   const wrap = $("attach-queue-wrap");
   const list = $("attach-queue-list");
+  const summary = $("attach-queue-summary");
   const queue = window.hvAttachQueue;
   if (!queue.length) {
     wrap.hidden = true;
@@ -254,12 +267,30 @@ function hvRenderAttachQueue() {
     return;
   }
   wrap.hidden = false;
-  list.innerHTML = queue
-    .map(
-      (item, i) =>
-        `<div class="list-row queue-row"><span class="row-title">${item.kind === "reuse" ? "📎 " : "📷 "}${hvEscapeHtml(item.name)}</span>` +
-        `<button type="button" class="remove-btn" data-remove-idx="${i}">Αφαίρεση</button></div>`
-    )
+  if (summary) summary.textContent = hvAttachQueueSummary();
+  const groups = [];
+  const groupIndex = {};
+  queue.forEach((item, i) => {
+    const key = item.entityType + ":" + item.entityValue;
+    if (!(key in groupIndex)) {
+      groupIndex[key] = groups.length;
+      groups.push({ entityType: item.entityType, entityLabel: item.entityLabel, items: [] });
+    }
+    groups[groupIndex[key]].items.push({ ...item, queueIdx: i });
+  });
+  list.innerHTML = groups
+    .map((g) => {
+      const icon = g.entityType === "unit" ? "🏭" : "📋";
+      const header = `<div class="section-divider">${icon} ${hvEscapeHtml(g.entityLabel)}</div>`;
+      const rows = g.items
+        .map(
+          (item) =>
+            `<div class="list-row queue-row"><span class="row-title">${item.kind === "reuse" ? "📎 " : "📷 "}${hvEscapeHtml(item.name)}</span>` +
+            `<button type="button" class="remove-btn" data-remove-idx="${item.queueIdx}">Αφαίρεση</button></div>`
+        )
+        .join("");
+      return header + rows;
+    })
     .join("");
   list.querySelectorAll("[data-remove-idx]").forEach((btn) => {
     btn.onclick = () => {
@@ -608,70 +639,101 @@ $("btn-add-attachment").onclick = () => {
   hvShowScreen("screen-add-attachment");
 };
 
+// ΣΗΜΑΝΤΙΚΟ: η αλλαγή τύπου/προορισμού ΔΕΝ αδειάζει πλέον την ουρά — έτσι ο τεχνικός
+// μπορεί να προσθέσει αρχεία για μια μονάδα, μετά να αλλάξει προορισμό (ακόμα και σε
+// εργασία) και να προσθέσει κι άλλα, όλα μαζί σε ένα "Υποβολή" στο τέλος.
 $("attachment-entity-type").onchange = () => {
   hvResetAttachmentEntitySelection();
-  hvResetAttachQueue();
 };
 
-$("btn-cancel-add-attachment").onclick = () => hvShowScreen("screen-main");
-$("btn-add-attachment-back").onclick = () => hvShowScreen("screen-main");
+$("btn-cancel-add-attachment").onclick = () => {
+  hvResetAttachQueue();
+  hvShowScreen("screen-main");
+};
+$("btn-add-attachment-back").onclick = () => {
+  hvResetAttachQueue();
+  hvShowScreen("screen-main");
+};
 
-$("btn-choose-files").onclick = () => $("attachment-files").click();
+$("btn-choose-files").onclick = () => {
+  if (!window.hvSelectedEntity) {
+    $("add-attachment-status").textContent = "Επίλεξε πρώτα μονάδα ή εργασία προορισμού.";
+    $("add-attachment-status").className = "status error";
+    return;
+  }
+  $("attachment-files").click();
+};
 $("attachment-files").onchange = () => {
   const files = $("attachment-files").files;
+  const target = window.hvSelectedEntity;
+  if (!target) {
+    $("attachment-files").value = "";
+    return;
+  }
+  const type = $("attachment-entity-type").value;
   for (let i = 0; i < files.length; i++) {
-    window.hvAttachQueue.push({ kind: "new", file: files[i], name: files[i].name });
+    window.hvAttachQueue.push({
+      kind: "new",
+      file: files[i],
+      name: files[i].name,
+      entityType: type,
+      entityValue: target.value,
+      entityLabel: target.label,
+    });
   }
   $("attachment-files").value = "";
   hvRenderAttachQueue();
 };
 
+// Η υποβολή στέλνει ΟΛΗ την ουρά, ό,τι κι αν περιέχει — αρχεία για μία ή για πολλές
+// μονάδες/εργασίες μαζί. Κάθε στοιχείο κουβαλάει ήδη τον δικό του προορισμό
+// (entityType/entityValue), οπότε δεν χρειάζεται πλέον ενιαίο "selected" προορισμό εδώ.
 $("btn-submit-attachment").onclick = async () => {
   const status = $("add-attachment-status");
   const token = hvGetValidToken();
   const outboxId = window.hvOutboxId;
-  const type = $("attachment-entity-type").value;
-  const selected = window.hvSelectedEntity;
   const queue = window.hvAttachQueue;
   if (!token || !outboxId) {
     status.textContent = "Κάνε πρώτα ανανέωση στην κύρια οθόνη.";
     status.className = "status error";
     return;
   }
-  if (!selected) {
-    status.textContent = "Επίλεξε μονάδα ή εργασία.";
-    status.className = "status error";
-    return;
-  }
   if (!queue.length) {
-    status.textContent = "Πρόσθεσε τουλάχιστον ένα αρχείο (νέο ή υπάρχον).";
+    status.textContent = "Πρόσθεσε τουλάχιστον ένα αρχείο (νέο ή υπάρχον) για κάποια μονάδα/εργασία.";
     status.className = "status error";
     return;
   }
-  const [kind, rawId] = selected.value.split(":");
-  const entityId = kind === "real" ? rawId : null;
-  const localUnitRef = kind === "local" ? rawId : null;
-  const entityLabel = selected.label;
   $("btn-submit-attachment").disabled = true;
   let sent = 0;
+  const perTarget = {};
   try {
     for (let i = 0; i < queue.length; i++) {
       const item = queue[i];
       status.textContent = `Αποστολή ${i + 1}/${queue.length}…`;
       status.className = "status";
+      const [kind, rawId] = item.entityValue.split(":");
+      const entityId = kind === "real" ? rawId : null;
+      const localUnitRef = kind === "local" ? rawId : null;
       if (item.kind === "new") {
-        await hvSubmitAttachment(token, outboxId, type, entityId, localUnitRef, item.file);
+        await hvSubmitAttachment(token, outboxId, item.entityType, entityId, localUnitRef, item.file);
       } else {
-        await hvSubmitAttachmentLink(token, outboxId, type, item.attachmentId, entityId, localUnitRef);
+        await hvSubmitAttachmentLink(token, outboxId, item.entityType, item.attachmentId, entityId, localUnitRef);
       }
       sent++;
+      const key = item.entityType + ":" + item.entityValue;
+      if (!perTarget[key]) perTarget[key] = { label: item.entityLabel, newC: 0, reuseC: 0 };
+      if (item.kind === "new") perTarget[key].newC++;
+      else perTarget[key].reuseC++;
     }
-    const newCount = queue.filter((i) => i.kind === "new").length;
-    const reuseCount = queue.filter((i) => i.kind === "reuse").length;
-    const parts = [];
-    if (newCount) parts.push(`${newCount} νέο${newCount > 1 ? "α" : ""}`);
-    if (reuseCount) parts.push(`${reuseCount} υπάρχον${reuseCount > 1 ? "τα" : ""}`);
-    hvAddPendingLog({ kind: "attachment", text: `Συνημμένα: ${entityLabel} — ${parts.join(", ")}` });
+    const summary = Object.values(perTarget)
+      .map((t) => {
+        const parts = [];
+        if (t.newC) parts.push(`${t.newC} νέο${t.newC > 1 ? "α" : ""}`);
+        if (t.reuseC) parts.push(`${t.reuseC} υπάρχον${t.reuseC > 1 ? "τα" : ""}`);
+        return `${t.label} — ${parts.join(", ")}`;
+      })
+      .join(" · ");
+    hvAddPendingLog({ kind: "attachment", text: `Συνημμένα: ${summary}` });
     window.hvAttachQueue = [];
     hvRenderAttachQueue();
     status.textContent = `✓ Στάλθηκαν ${sent} αρχεία.`;
@@ -760,8 +822,19 @@ function hvOpenReuseFiles() {
 
 function hvConfirmReuseAttachment(att) {
   // Δεν στέλνει τίποτα αμέσως - απλώς προσθέτει στην κοινή ουρά (μαζί με τυχόν νέα
-  // αρχεία), ώστε να φαίνονται όλα μαζί πριν το τελικό "Υποβολή".
-  window.hvAttachQueue.push({ kind: "reuse", attachmentId: att.id, name: att.name });
+  // αρχεία, ακόμα και για ΑΛΛΟΥΣ προορισμούς), ώστε να φαίνονται όλα μαζί πριν το
+  // τελικό "Υποβολή". Ετικετάρεται με τον τρέχοντα προορισμό (window.hvSelectedEntity)
+  // τη στιγμή που προστίθεται.
+  const target = window.hvSelectedEntity;
+  const type = $("attachment-entity-type").value;
+  window.hvAttachQueue.push({
+    kind: "reuse",
+    attachmentId: att.id,
+    name: att.name,
+    entityType: type,
+    entityValue: target.value,
+    entityLabel: target.label,
+  });
   hvRenderAttachQueue();
   const status = $("add-attachment-status");
   status.textContent = "Προστέθηκε στη λίστα προς αποστολή.";
