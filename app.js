@@ -283,11 +283,18 @@ function hvRenderAttachQueue() {
       const icon = g.entityType === "unit" ? "🏭" : "📋";
       const header = `<div class="section-divider">${icon} ${hvEscapeHtml(g.entityLabel)}</div>`;
       const rows = g.items
-        .map(
-          (item) =>
-            `<div class="list-row queue-row"><span class="row-title">${item.kind === "reuse" ? "📎 " : "📷 "}${hvEscapeHtml(item.name)}</span>` +
+        .map((item) => {
+          // Για "χρήση υπάρχοντος" δείχνουμε ΚΑΙ από πού προέρχεται το αρχείο, ώστε να
+          // μην μπερδεύεται ο τεχνικός για το ποιο αρχείο συνδέει με ποιον προορισμό.
+          const sourceNote =
+            item.kind === "reuse" && item.sourceLabel
+              ? ` <span style="color:var(--text-dim);font-weight:400">(από: ${hvEscapeHtml(item.sourceLabel)})</span>`
+              : "";
+          return (
+            `<div class="list-row queue-row"><span class="row-title">${item.kind === "reuse" ? "📎 " : "📷 "}${hvEscapeHtml(item.name)}${sourceNote}</span>` +
             `<button type="button" class="remove-btn" data-remove-idx="${item.queueIdx}">Αφαίρεση</button></div>`
-        )
+          );
+        })
         .join("");
       return header + rows;
     })
@@ -721,15 +728,26 @@ $("btn-submit-attachment").onclick = async () => {
       }
       sent++;
       const key = item.entityType + ":" + item.entityValue;
-      if (!perTarget[key]) perTarget[key] = { label: item.entityLabel, newC: 0, reuseC: 0 };
-      if (item.kind === "new") perTarget[key].newC++;
-      else perTarget[key].reuseC++;
+      if (!perTarget[key]) perTarget[key] = { label: item.entityLabel, newC: 0, reuseC: 0, reuseSources: [] };
+      if (item.kind === "new") {
+        perTarget[key].newC++;
+      } else {
+        perTarget[key].reuseC++;
+        if (item.sourceLabel && !perTarget[key].reuseSources.includes(item.sourceLabel)) {
+          perTarget[key].reuseSources.push(item.sourceLabel);
+        }
+      }
     }
+    // Το μήνυμα στις "Εκκρεμείς καταχωρήσεις" πρέπει να είναι σαφές ΚΑΙ για το από πού
+    // ήρθε κάθε "υπάρχον" συνημμένο — όχι μόνο πού πάει.
     const summary = Object.values(perTarget)
       .map((t) => {
         const parts = [];
         if (t.newC) parts.push(`${t.newC} νέο${t.newC > 1 ? "α" : ""}`);
-        if (t.reuseC) parts.push(`${t.reuseC} υπάρχον${t.reuseC > 1 ? "τα" : ""}`);
+        if (t.reuseC) {
+          const src = t.reuseSources.length ? ` (από: ${t.reuseSources.join(", ")})` : "";
+          parts.push(`${t.reuseC} υπάρχον${t.reuseC > 1 ? "τα" : ""}${src}`);
+        }
         return `${t.label} — ${parts.join(", ")}`;
       })
       .join(" · ");
@@ -806,38 +824,46 @@ function hvRenderReuseSearch() {
   });
 }
 
+// ΣΗΜΑΝΤΙΚΟ (σαφήνεια πηγής/προορισμού): εδώ ο τεχνικός βλέπει τα αρχεία μιας ΑΛΛΗΣ
+// μονάδας/εργασίας (της "πηγής") — γι' αυτό δείχνουμε ρητά και σε ποιον προορισμό θα
+// συνδεθεί ό,τι επιλέξει, ώστε να μη μπερδεύεται ποιο είναι το ένα και ποιο το άλλο.
 function hvOpenReuseFiles() {
   const type = $("attachment-entity-type").value;
   const e = hvReuseSourceEntity;
-  $("reuse-files-eyebrow").textContent = "Χρήση υπάρχοντος · " + (type === "unit" ? e.name : e.description || "(χωρίς περιγραφή)");
+  const sourceLabel = type === "unit" ? e.name : e.description || "(χωρίς περιγραφή)";
+  const destLabel = window.hvSelectedEntity ? window.hvSelectedEntity.label : "—";
+  $("reuse-files-eyebrow").textContent = "Πηγή: " + sourceLabel;
+  $("reuse-files-target-note").textContent = "Το αρχείο που θα διαλέξεις θα συνδεθεί με: " + destLabel;
   const list = $("reuse-files-list");
   list.innerHTML = e.attachments
     .map((a, i) => `<div class="list-row" data-idx="${i}"><div class="row-title">${hvEscapeHtml(a.name)}</div></div>`)
     .join("");
   list.querySelectorAll("[data-idx]").forEach((row) => {
-    row.onclick = () => hvConfirmReuseAttachment(e.attachments[Number(row.dataset.idx)]);
+    row.onclick = () => hvConfirmReuseAttachment(e.attachments[Number(row.dataset.idx)], sourceLabel);
   });
   hvShowScreen("screen-reuse-files");
 }
 
-function hvConfirmReuseAttachment(att) {
+function hvConfirmReuseAttachment(att, sourceLabel) {
   // Δεν στέλνει τίποτα αμέσως - απλώς προσθέτει στην κοινή ουρά (μαζί με τυχόν νέα
   // αρχεία, ακόμα και για ΑΛΛΟΥΣ προορισμούς), ώστε να φαίνονται όλα μαζί πριν το
-  // τελικό "Υποβολή". Ετικετάρεται με τον τρέχοντα προορισμό (window.hvSelectedEntity)
-  // τη στιγμή που προστίθεται.
+  // τελικό "Υποβολή". Ετικετάρεται ΚΑΙ με τον προορισμό (window.hvSelectedEntity) ΚΑΙ
+  // με την πηγή (sourceLabel) τη στιγμή που προστίθεται, ώστε στην ουρά/στο ιστορικό να
+  // φαίνεται ξεκάθαρα "αυτό το αρχείο ήρθε από εκεί και πάει εδώ".
   const target = window.hvSelectedEntity;
   const type = $("attachment-entity-type").value;
   window.hvAttachQueue.push({
     kind: "reuse",
     attachmentId: att.id,
     name: att.name,
+    sourceLabel,
     entityType: type,
     entityValue: target.value,
     entityLabel: target.label,
   });
   hvRenderAttachQueue();
   const status = $("add-attachment-status");
-  status.textContent = "Προστέθηκε στη λίστα προς αποστολή.";
+  status.textContent = `✓ "${att.name}" (από: ${sourceLabel}) προστέθηκε στη λίστα — θα συνδεθεί με: ${target.label}.`;
   status.className = "status ok";
   hvShowScreen("screen-add-attachment");
 }
@@ -855,7 +881,9 @@ $("mode-reuse").onclick = () => {
   }
   $("mode-reuse").classList.add("active");
   $("mode-new-file").classList.remove("active");
-  $("reuse-search-eyebrow").textContent = "Χρήση υπάρχοντος · " + (($("attachment-entity-type").value === "unit") ? "Μονάδα" : "Εργασία");
+  // Ρητή αναφορά στον προορισμό εδώ (όχι απλώς "Μονάδα/Εργασία") ώστε να είναι σαφές
+  // ΠΟΥ θα καταλήξει το αρχείο που πρόκειται να διαλέξει ο τεχνικός στην επόμενη οθόνη.
+  $("reuse-search-eyebrow").textContent = "Προορισμός: " + window.hvSelectedEntity.label;
   $("reuse-search").value = "";
   hvRenderReuseSearch();
   hvShowScreen("screen-reuse-search");
