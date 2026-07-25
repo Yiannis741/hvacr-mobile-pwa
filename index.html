@@ -20,6 +20,31 @@
       <button id="btn-signin">Σύνδεση με Google</button>
       <p id="signin-status" class="status"></p>
     </div>
+    <div class="card">
+      <p class="muted-note" style="text-align:left">Ή, αν ο υπολογιστής είναι προσβάσιμος απευθείας μέσω δικτύου (π.χ. Tailscale):</p>
+      <button class="secondary" id="btn-open-direct-setup">Άμεση Σύνδεση (χωρίς Google)</button>
+    </div>
+  </section>
+
+  <section id="screen-connection" class="screen" hidden>
+    <div class="topbar">
+      <button class="icon-back" id="btn-connection-back">‹ Πίσω</button>
+      <div class="topbar-title">
+        <h2>Άμεση Σύνδεση</h2>
+      </div>
+    </div>
+    <div class="card">
+      <p class="muted-note" style="text-align:left">Βάλε τη διεύθυνση του υπολογιστή (π.χ. <code>http://100.x.x.x:8767</code>) και το token από τη σελίδα Ρυθμίσεις → "Άμεση Σύνδεση Κινητού (Tailscale)" στον υπολογιστή.</p>
+      <label class="required">Διεύθυνση υπολογιστή</label>
+      <input type="text" id="direct-url" placeholder="http://100.x.x.x:8767" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <label class="required">Token</label>
+      <input type="text" id="direct-token" placeholder="token" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <p id="direct-setup-status" class="status"></p>
+      <div class="button-row">
+        <button class="secondary" id="btn-direct-test">Δοκιμή σύνδεσης</button>
+        <button id="btn-direct-connect">Σύνδεση</button>
+      </div>
+    </div>
   </section>
 
   <section id="screen-folder" class="screen" hidden>
@@ -51,9 +76,12 @@
       <div class="pending-list" id="pending-list"></div>
       <button class="secondary" id="btn-clear-pending" style="margin-top:12px">Καθαρισμός λίστας</button>
     </div>
-    <div class="card">
+    <div class="card" id="drive-account-card">
       <button class="secondary" id="btn-change-folder">Αλλαγή φακέλου</button>
       <button class="danger" id="btn-signout" style="margin-top:10px">Αποσύνδεση</button>
+    </div>
+    <div class="card" id="direct-account-card" hidden>
+      <button class="danger" id="btn-direct-disconnect">Αποσύνδεση Άμεσης Σύνδεσης</button>
     </div>
   </section>
 
@@ -131,7 +159,7 @@
         <div class="list" id="attach-queue-list"></div>
       </div>
 
-      <p class="notice-banner" style="margin-top:14px">⏳ Η αποστολή εφαρμόζεται στον υπολογιστή μόνο στον επόμενο συγχρονισμό, όχι αμέσως.</p>
+      <p class="notice-banner" id="attach-notice-banner" style="margin-top:14px">⏳ Η αποστολή εφαρμόζεται στον υπολογιστή μόνο στον επόμενο συγχρονισμό, όχι αμέσως.</p>
 
       <p id="add-attachment-status" class="status"></p>
       <div class="button-row">
@@ -149,7 +177,7 @@
         <h2>Επιλογή πηγής</h2>
       </div>
     </div>
-    <p class="notice-banner">⏳ Θα εφαρμοστεί μόνο μετά τον επόμενο συγχρονισμό στον υπολογιστή — όχι αμέσως.</p>
+    <p class="notice-banner" id="reuse-notice-banner">⏳ Θα εφαρμοστεί μόνο μετά τον επόμενο συγχρονισμό στον υπολογιστή — όχι αμέσως.</p>
     <div class="search-box">
       <input type="text" id="reuse-search" placeholder="Αναζήτηση…">
     </div>
@@ -275,10 +303,11 @@
 </main>
 
 <script src="https://apis.google.com/js/api.js" async defer></script>
-<script src="config.js?v=21"></script>
-<script src="auth.js?v=21"></script>
-<script src="picker.js?v=21"></script>
-<script src="drive.js?v=21"></script>
-<script src="app.js?v=21"></script>
+<script src="config.js?v=22"></script>
+<script src="auth.js?v=22"></script>
+<script src="picker.js?v=22"></script>
+<script src="drive.js?v=22"></script>
+<script src="direct.js?v=22"></script>
+<script src="app.js?v=22"></script>
 </body>
 </html>

@@ -2,6 +2,7 @@ function $(id) { return document.getElementById(id); }
 
 const HV_SCREENS = [
   "screen-signin",
+  "screen-connection",
   "screen-folder",
   "screen-main",
   "screen-add-unit",
@@ -18,6 +19,16 @@ function hvShowScreen(id) {
   HV_SCREENS.forEach((s) => {
     $(s).hidden = s !== id;
   });
+  // Σε Direct mode οι αποστολές εφαρμόζονται ΑΜΕΣΑ (όχι μετά τον επόμενο συγχρονισμό) —
+  // ενημερώνουμε τα σχετικά μπάνερ κάθε φορά που ανοίγουν αυτές οι οθόνες.
+  if (id === "screen-add-attachment") {
+    const el = $("attach-notice-banner");
+    if (el) el.textContent = hvIsDirect() ? "⚡ Η αποστολή εφαρμόζεται αμέσως στον υπολογιστή." : "⏳ Η αποστολή εφαρμόζεται στον υπολογιστή μόνο στον επόμενο συγχρονισμό, όχι αμέσως.";
+  }
+  if (id === "screen-reuse-search") {
+    const el = $("reuse-notice-banner");
+    if (el) el.textContent = hvIsDirect() ? "⚡ Θα εφαρμοστεί αμέσως στον υπολογιστή." : "⏳ Θα εφαρμοστεί μόνο μετά τον επόμενο συγχρονισμό στον υπολογιστή — όχι αμέσως.";
+  }
 }
 
 function hvEscapeHtml(str) {
@@ -156,9 +167,99 @@ window.onHvAuthSuccess = function (token) {
   }
 };
 
+// --- Άμεση Σύνδεση (Tailscale) — δεύτερος τρόπος επικοινωνίας, δείτε direct.js. Όταν είναι
+// ενεργή, παρακάμπτει εντελώς το Google Sign-In/Drive: η κύρια οθόνη τραβάει το snapshot
+// απευθείας από τον υπολογιστή και οι αποστολές εφαρμόζονται ΣΥΓΧΡΟΝΙΣΜΕΝΑ (χωρίς αναμονή).
+function hvIsDirect() {
+  return typeof hvDirectActive === "function" && hvDirectActive();
+}
+
+function hvEnterMainDirect() {
+  $("info-folder-name").textContent = "Άμεση Σύνδεση (Tailscale)";
+  $("drive-account-card").hidden = true;
+  $("direct-account-card").hidden = false;
+  hvShowScreen("screen-main");
+  hvRenderPendingList();
+  hvRefreshData();
+}
+
+$("btn-open-direct-setup").onclick = () => {
+  $("direct-url").value = hvDirectGetConfig().url || "";
+  $("direct-token").value = hvDirectGetConfig().token || "";
+  $("direct-setup-status").textContent = "";
+  hvShowScreen("screen-connection");
+};
+$("btn-connection-back").onclick = () => hvShowScreen("screen-signin");
+
+$("btn-direct-test").onclick = async () => {
+  const status = $("direct-setup-status");
+  const url = $("direct-url").value.trim();
+  const token = $("direct-token").value.trim();
+  if (!url || !token) {
+    status.textContent = "Συμπλήρωσε διεύθυνση και token.";
+    status.className = "status error";
+    return;
+  }
+  status.textContent = "Δοκιμή…";
+  status.className = "status";
+  try {
+    const r = await hvDirectTestConnection(url, token);
+    status.textContent = `✓ Επιτυχής σύνδεση — ${r.units} μονάδες, ${r.tasks} εργασίες.`;
+    status.className = "status ok";
+  } catch (err) {
+    status.textContent = "Αποτυχία: " + err.message;
+    status.className = "status error";
+  }
+};
+
+$("btn-direct-connect").onclick = async () => {
+  const status = $("direct-setup-status");
+  const url = $("direct-url").value.trim();
+  const token = $("direct-token").value.trim();
+  if (!url || !token) {
+    status.textContent = "Συμπλήρωσε διεύθυνση και token.";
+    status.className = "status error";
+    return;
+  }
+  status.textContent = "Σύνδεση…";
+  status.className = "status";
+  try {
+    await hvDirectTestConnection(url, token);
+    hvDirectSetConfig({ url, token, enabled: true });
+    hvEnterMainDirect();
+  } catch (err) {
+    status.textContent = "Αποτυχία: " + err.message;
+    status.className = "status error";
+  }
+};
+
+$("btn-direct-disconnect").onclick = () => {
+  hvDirectClearConfig();
+  hvShowScreen("screen-signin");
+};
+
 async function hvRefreshData() {
-  const token = hvGetValidToken();
   const status = $("main-status");
+  if (hvIsDirect()) {
+    status.textContent = "Ανανέωση…";
+    status.className = "status";
+    try {
+      const snapshot = await hvDirectFetchSnapshot();
+      $("info-generated-at").textContent = snapshot.generated_at ? new Date(snapshot.generated_at).toLocaleString("el-GR") : "—";
+      $("info-units-count").textContent = (snapshot.units || []).length;
+      $("info-tasks-count").textContent = (snapshot.tasks || []).length;
+      window.hvSnapshot = snapshot;
+      window.hvOutboxId = "direct"; // sentinel — μη-κενό ώστε οι υπάρχοντες έλεγχοι if(!outboxId) να περνάνε
+      window.hvSyncFolders = null;
+      status.textContent = "✓ Ενημερώθηκε.";
+      status.className = "status ok";
+    } catch (err) {
+      status.textContent = "Σφάλμα: " + err.message;
+      status.className = "status error";
+    }
+    return;
+  }
+  const token = hvGetValidToken();
   const folderId = localStorage.getItem("hv_folder_id");
   if (!token || !folderId) return;
   status.textContent = "Ανανέωση…";
@@ -262,12 +363,13 @@ $("btn-add-unit-back").onclick = () => hvShowScreen("screen-main");
 
 $("btn-submit-unit").onclick = async () => {
   const status = $("add-unit-status");
+  const direct = hvIsDirect();
   const token = hvGetValidToken();
   const outboxId = window.hvOutboxId;
   const name = $("unit-name").value.trim();
   const locationId = $("unit-location").value;
   const groupId = $("unit-group").value;
-  if (!token || !outboxId) {
+  if (!direct && (!token || !outboxId)) {
     status.textContent = "Κάνε πρώτα ανανέωση στην κύρια οθόνη.";
     status.className = "status error";
     return;
@@ -290,8 +392,21 @@ $("btn-submit-unit").onclick = async () => {
   status.textContent = "Αποστολή…";
   status.className = "status";
   try {
-    const localId = await hvSubmitUnitCreate(token, outboxId, payload);
-    hvAddPendingLog({ kind: "unit", localId, ids: [localId], text: `Νέα μονάδα: ${name}` });
+    if (direct) {
+      // Το unit.create εφαρμόζεται ΑΜΕΣΑ στον υπολογιστή — το πραγματικό id είναι
+      // διαθέσιμο ήδη, οπότε δεν χρειάζεται "local_unit_ref": προσθέτουμε τη νέα μονάδα
+      // κατευθείαν στο τοπικό snapshot ώστε να εμφανιστεί αμέσως ως κανονική επιλογή
+      // (π.χ. στο "Νέο Συνημμένο") χωρίς να χρειάζεται πρώτα Ανανέωση.
+      const r = await hvDirectSyncOne("unit.create", payload);
+      if (window.hvSnapshot) {
+        window.hvSnapshot.units = window.hvSnapshot.units || [];
+        window.hvSnapshot.units.push({ id: r.server_id, name, model: payload.model, serial_number: payload.serial_number, notes: payload.notes, location_id: payload.location_id, group_id: payload.group_id, attachment_count: 0 });
+      }
+      hvAddPendingLog({ kind: "unit", ids: [], text: `Νέα μονάδα: ${name}`, status: "applied" });
+    } else {
+      const localId = await hvSubmitUnitCreate(token, outboxId, payload);
+      hvAddPendingLog({ kind: "unit", localId, ids: [localId], text: `Νέα μονάδα: ${name}` });
+    }
     status.textContent = "✓ Στάλθηκε.";
     status.className = "status ok";
     setTimeout(() => hvShowScreen("screen-main"), 600);
@@ -781,10 +896,11 @@ $("attachment-files").onchange = () => {
 // (entityType/entityValue), οπότε δεν χρειάζεται πλέον ενιαίο "selected" προορισμό εδώ.
 $("btn-submit-attachment").onclick = async () => {
   const status = $("add-attachment-status");
+  const direct = hvIsDirect();
   const token = hvGetValidToken();
   const outboxId = window.hvOutboxId;
   const queue = window.hvAttachQueue;
-  if (!token || !outboxId) {
+  if (!direct && (!token || !outboxId)) {
     status.textContent = "Κάνε πρώτα ανανέωση στην κύρια οθόνη.";
     status.className = "status error";
     return;
@@ -807,7 +923,17 @@ $("btn-submit-attachment").onclick = async () => {
       const entityId = kind === "real" ? rawId : null;
       const localUnitRef = kind === "local" ? rawId : null;
       let reqId;
-      if (item.kind === "new") {
+      if (direct) {
+        if (!entityId) throw new Error("Αυτός ο προορισμός δεν έχει ακόμα πραγματικό id — κάνε Ανανέωση και ξαναδοκίμασε.");
+        if (item.kind === "new") {
+          const uploadFile = await hvCompressImageFile(item.file);
+          const r = await hvDirectUploadAttachment(item.entityType, entityId, uploadFile);
+          reqId = "direct-" + (r.attachment_id != null ? r.attachment_id : i);
+        } else {
+          const r = await hvDirectSyncOne("attachment.link", { kind: item.entityType, attachment_id: Number(item.attachmentId), entity_id: Number(entityId) });
+          reqId = "direct-" + (r.server_id != null ? r.server_id : i);
+        }
+      } else if (item.kind === "new") {
         reqId = await hvSubmitAttachment(token, outboxId, item.entityType, entityId, localUnitRef, item.file);
       } else {
         reqId = await hvSubmitAttachmentLink(token, outboxId, item.entityType, item.attachmentId, entityId, localUnitRef);
@@ -846,7 +972,7 @@ $("btn-submit-attachment").onclick = async () => {
         return `${t.entityLabel} — ${parts.join(", ")}`;
       })
       .join(" · ");
-    hvAddPendingLog({ kind: "attachment", ids: sentIds, targets, text: `Συνημμένα: ${summary}` });
+    hvAddPendingLog({ kind: "attachment", ids: sentIds, targets, text: `Συνημμένα: ${summary}`, status: direct ? "applied" : "pending" });
     window.hvAttachQueue = [];
     hvRenderAttachQueue();
     status.textContent = `✓ Στάλθηκαν ${sent} αρχεία.`;
@@ -1198,9 +1324,10 @@ $("btn-task-detail-back").onclick = () => hvShowScreen("screen-browse");
 $("btn-td-save").onclick = async () => {
   const t = window.hvCurrentTask;
   const status = $("task-detail-status");
+  const direct = hvIsDirect();
   const token = hvGetValidToken();
   const outboxId = window.hvOutboxId;
-  if (!t || !token || !outboxId) {
+  if (!t || (!direct && (!token || !outboxId))) {
     status.textContent = "Κάνε πρώτα ανανέωση στην κύρια οθόνη.";
     status.className = "status error";
     return;
@@ -1215,11 +1342,18 @@ $("btn-td-save").onclick = async () => {
   status.textContent = "Αποστολή…";
   status.className = "status";
   try {
-    const reqId = await hvSubmitTaskUpdate(token, outboxId, t.id, changes);
+    let reqId;
+    if (direct) {
+      const r = await hvDirectSyncOne("task.update", { task_id: t.id, ...changes });
+      reqId = "direct-" + (r.server_id != null ? r.server_id : t.id);
+    } else {
+      reqId = await hvSubmitTaskUpdate(token, outboxId, t.id, changes);
+    }
     hvAddPendingLog({
       kind: "task",
       ids: [reqId],
       text: `Ενημέρωση εργασίας: ${changes.description || t.description || "#" + t.id}`,
+      status: direct ? "applied" : "pending",
     });
     status.textContent = "✓ Στάλθηκε.";
     status.className = "status ok";
@@ -1275,6 +1409,10 @@ function hvReturnFromAddAttachment() {
 (function hvBoot() {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+  if (hvIsDirect()) {
+    hvEnterMainDirect();
+    return;
   }
   const fromRedirect = hvConsumeAuthRedirect();
   const existing = fromRedirect || hvGetValidToken();
