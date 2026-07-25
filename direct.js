@@ -27,6 +27,15 @@
     if (cfg.url !== undefined) localStorage.setItem("hv_direct_url", normalizeUrl(cfg.url));
     if (cfg.token !== undefined) localStorage.setItem("hv_direct_token", String(cfg.token || "").trim());
     if (cfg.enabled !== undefined) localStorage.setItem("hv_direct_enabled", cfg.enabled ? "1" : "");
+    // Οι browsers (ειδικά σε http, όχι https, όπως εδώ) μπορούν να "καθαρίσουν" μόνοι
+    // τους localStorage χαμηλής προτεραιότητας όποτε χρειαστούν χώρο ή μετά από πλήρες
+    // κλείσιμο του browser — ζητάμε ρητά "μόνιμη" αποθήκευση ώστε τα στοιχεία σύνδεσης να
+    // μην χαθούν. Ο browser μπορεί να το αρνηθεί σιωπηλά (π.χ. αν η σελίδα δεν είναι
+    // "εγκατεστημένη" στην αρχική οθόνη) — γι' αυτό συνιστούμε ΚΑΙ "Προσθήκη στην αρχική
+    // οθόνη" στον χρήστη, που αυξάνει σημαντικά τις πιθανότητες να εγκριθεί.
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().catch(() => {});
+    }
   };
 
   window.hvDirectClearConfig = function () {
@@ -158,4 +167,10 @@
       clearTimeout(timer);
     }
   };
+
+  // Ζητάμε "μόνιμη" αποθήκευση και σε κάθε φόρτωμα της σελίδας (όχι μόνο τη στιγμή της
+  // σύνδεσης) — καλύπτει και όσους συνδέθηκαν πριν προστεθεί αυτό το request.
+  if (window.hvDirectActive && window.hvDirectActive() && navigator.storage && navigator.storage.persist) {
+    navigator.storage.persist().catch(() => {});
+  }
 })();
