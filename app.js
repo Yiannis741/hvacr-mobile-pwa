@@ -728,6 +728,7 @@ $("btn-add-attachment").onclick = () => {
   hvResetAttachmentEntitySelection();
   hvResetAttachmentMode();
   hvResetAttachQueue();
+  window.hvAttachReturnTo = { screen: "screen-main" };
   hvShowScreen("screen-add-attachment");
 };
 
@@ -739,12 +740,10 @@ $("attachment-entity-type").onchange = () => {
 };
 
 $("btn-cancel-add-attachment").onclick = () => {
-  hvResetAttachQueue();
-  hvShowScreen("screen-main");
+  hvReturnFromAddAttachment();
 };
 $("btn-add-attachment-back").onclick = () => {
-  hvResetAttachQueue();
-  hvShowScreen("screen-main");
+  hvReturnFromAddAttachment();
 };
 
 $("btn-choose-files").onclick = () => {
@@ -852,6 +851,7 @@ $("btn-submit-attachment").onclick = async () => {
     hvRenderAttachQueue();
     status.textContent = `✓ Στάλθηκαν ${sent} αρχεία.`;
     status.className = "status ok";
+    setTimeout(() => hvReturnFromAddAttachment(), 600);
   } catch (err) {
     window.hvAttachQueue = queue.slice(sent);
     hvRenderAttachQueue();
@@ -927,6 +927,40 @@ function hvFileTypeIcon(name) {
   if (["jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "bmp"].includes(ext)) return "🖼️";
   if (ext === "pdf") return "📄";
   return "📎";
+}
+
+// Γενική (μη διαδραστική) λίστα συνημμένων με μικρογραφίες/εικονίδια — χρησιμοποιείται
+// στη "Στοιχεία μονάδας/εργασίας" ώστε να φαίνονται τα ίδια τα συνημμένα, όχι μόνο ο
+// αριθμός τους. idPrefix πρέπει να είναι μοναδικό ανά λίστα ώστε να μη συγκρούονται τα
+// ids των στοιχείων μικρογραφίας μεταξύ διαφορετικών οθονών.
+function hvRenderThumbList(atts, listElId, idPrefix) {
+  const list = $(listElId);
+  if (!list) return;
+  if (!atts || !atts.length) {
+    list.innerHTML = "";
+    return;
+  }
+  list.innerHTML = atts
+    .map(
+      (a, i) =>
+        `<div class="list-row reuse-file-row" style="cursor:default">` +
+        `<div class="reuse-file-thumb" id="${idPrefix}-${i}">${hvFileTypeIcon(a.name)}</div>` +
+        `<div class="reuse-file-info"><div class="row-title">${hvEscapeHtml(a.name)}</div></div>` +
+        `</div>`
+    )
+    .join("");
+  const token = hvGetValidToken();
+  const thumbFolderId = window.hvSyncFolders ? window.hvSyncFolders.thumbnails : null;
+  if (token && thumbFolderId) {
+    atts.forEach((a, i) => {
+      if (!a.has_thumb) return;
+      hvFetchThumbnailUrl(token, thumbFolderId, a.id).then((url) => {
+        if (!url) return;
+        const el = $(`${idPrefix}-${i}`);
+        if (el) el.innerHTML = `<img src="${url}" alt="">`;
+      });
+    });
+  }
 }
 
 // ΣΗΜΑΝΤΙΚΟ (σαφήνεια πηγής/προορισμού): εδώ ο τεχνικός βλέπει τα αρχεία μιας ΑΛΛΗΣ
@@ -1068,6 +1102,7 @@ function hvRenderBrowseList() {
           <div class="row-badges">
             <span class="badge status-${t.status}">${hvStatusLabel[t.status] || t.status}</span>
             <span class="badge priority-${t.priority}">${hvPriorityLabel[t.priority] || t.priority || "—"}</span>
+            ${t.attachment_count ? `<span class="badge att-count">📎 ${t.attachment_count}</span>` : ""}
           </div>
         </div>`
       )
@@ -1112,13 +1147,15 @@ function hvOpenUnitDetail(unitId) {
   $("ud-location").textContent = [u.location, hvGroupName(u.group_id)].filter(Boolean).join(" · ") || "—";
   $("ud-model").textContent = u.model || "—";
   $("ud-serial").textContent = u.serial_number || "—";
-  $("ud-attachments").textContent = u.attachment_count || 0;
   if (u.notes) {
     $("ud-notes-wrap").hidden = false;
     $("ud-notes").textContent = u.notes;
   } else {
     $("ud-notes-wrap").hidden = true;
   }
+  const atts = u.attachments || [];
+  $("ud-attachments-wrap").hidden = !atts.length;
+  hvRenderThumbList(atts, "ud-attachments-list", "ud-thumb");
   hvShowScreen("screen-unit-detail");
 }
 
@@ -1150,6 +1187,9 @@ function hvOpenTaskDetail(taskId) {
   $("td-edit-status").value = t.status || "pending";
   $("task-detail-status").textContent = "";
   $("task-detail-status").className = "status";
+  const tAtts = t.attachments || [];
+  $("td-attachments-wrap").hidden = !tAtts.length;
+  hvRenderThumbList(tAtts, "td-attachments-list", "td-thumb");
   hvShowScreen("screen-task-detail");
 }
 
@@ -1212,7 +1252,24 @@ function hvOpenAddAttachmentFor(type, realId) {
   } else {
     hvResetAttachmentEntitySelection();
   }
+  window.hvAttachReturnTo = {
+    screen: type === "task" ? "screen-task-detail" : "screen-unit-detail",
+    id: realId,
+  };
   hvShowScreen("screen-add-attachment");
+}
+
+function hvReturnFromAddAttachment() {
+  hvResetAttachQueue();
+  const ret = window.hvAttachReturnTo || { screen: "screen-main" };
+  window.hvAttachReturnTo = null;
+  if (ret.screen === "screen-unit-detail" && ret.id != null) {
+    hvOpenUnitDetail(ret.id);
+  } else if (ret.screen === "screen-task-detail" && ret.id != null) {
+    hvOpenTaskDetail(ret.id);
+  } else {
+    hvShowScreen("screen-main");
+  }
 }
 
 (function hvBoot() {

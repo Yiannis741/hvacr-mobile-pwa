@@ -213,8 +213,11 @@
       </div>
       <div class="kv"><span>Μοντέλο</span><span id="ud-model">—</span></div>
       <div class="kv"><span>Serial Number</span><span id="ud-serial">—</span></div>
-      <div class="kv"><span>Συνημμένα</span><span id="ud-attachments">—</span></div>
       <p id="ud-notes-wrap" hidden style="margin-top:12px"><span class="section-title">Σημειώσεις</span><br><span id="ud-notes" class="status" style="color:var(--text-dim)"></span></p>
+    </div>
+    <div class="card" id="ud-attachments-wrap" hidden>
+      <span class="section-title">Συνημμένα</span>
+      <div class="list" id="ud-attachments-list" style="margin-top:8px"></div>
     </div>
     <div class="card">
       <button id="btn-ud-add-attachment">+ Προσθήκη συνημμένου σε αυτή τη μονάδα</button>
@@ -260,6 +263,10 @@
       <p id="task-detail-status" class="status"></p>
       <button id="btn-td-save" style="margin-top:6px">Αποθήκευση αλλαγών</button>
     </div>
+    <div class="card" id="td-attachments-wrap" hidden>
+      <span class="section-title">Συνημμένα</span>
+      <div class="list" id="td-attachments-list" style="margin-top:8px"></div>
+    </div>
     <div class="card">
       <button id="btn-td-add-attachment" class="secondary">+ Προσθήκη συνημμένου σε αυτή την εργασία</button>
     </div>
@@ -268,10 +275,10 @@
 </main>
 
 <script src="https://apis.google.com/js/api.js" async defer></script>
-<script src="config.js?v=20"></script>
-<script src="auth.js?v=20"></script>
-<script src="picker.js?v=20"></script>
-<script src="drive.js?v=20"></script>
-<script src="app.js?v=20"></script>
+<script src="config.js?v=21"></script>
+<script src="auth.js?v=21"></script>
+<script src="picker.js?v=21"></script>
+<script src="drive.js?v=21"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>
