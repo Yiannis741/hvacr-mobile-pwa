@@ -40,9 +40,11 @@
       <p id="main-status" class="status"></p>
     </div>
     <div class="card">
-      <button class="violet" id="btn-browse">Προβολή / Αναζήτηση</button>
-      <button id="btn-add-unit" style="margin-top:10px">+ Προσθήκη μονάδας</button>
-      <button id="btn-add-attachment" style="margin-top:10px">+ Προσθήκη συνημμένου</button>
+      <div class="action-grid">
+        <button class="tile full violet" id="btn-browse"><span class="tile-icon">🔍</span><span>Προβολή / Αναζήτηση</span></button>
+        <button class="tile" id="btn-add-unit"><span class="tile-icon">🏭</span><span>Νέα Μονάδα</span></button>
+        <button class="tile" id="btn-add-attachment"><span class="tile-icon">📎</span><span>Νέο Συνημμένο</span></button>
+      </div>
     </div>
     <div class="card" id="pending-card" hidden>
       <p>Εκκρεμείς καταχωρήσεις σε αυτή τη συσκευή (θα εμφανιστούν στον υπολογιστή μετά τον επόμενο συγχρονισμό).</p>
@@ -97,9 +99,16 @@
       <label class="required" id="attachment-entity-label">Μονάδα</label>
       <button type="button" class="secondary" id="btn-pick-entity" style="text-align:left">Επίλεξε…</button>
 
-      <label class="required">Αρχεία (φωτογραφίες, PDF)</label>
-      <input type="file" id="attachment-files" accept="image/*,application/pdf" multiple>
-      <button type="button" class="secondary" id="btn-reuse-attachment" style="margin-top:8px">Χρήση υπάρχοντος</button>
+      <label class="required">Πώς θα προσθέσεις το συνημμένο;</label>
+      <div class="segmented">
+        <button type="button" class="segmented-btn active" id="mode-new-file">📷 Νέο αρχείο</button>
+        <button type="button" class="segmented-btn" id="mode-reuse">📎 Χρήση υπάρχοντος</button>
+      </div>
+
+      <div id="attach-new-section">
+        <label class="required">Αρχεία (φωτογραφίες, PDF)</label>
+        <input type="file" id="attachment-files" accept="image/*,application/pdf" multiple>
+      </div>
 
       <p id="add-attachment-status" class="status"></p>
       <div class="button-row">
@@ -112,8 +121,12 @@
   <section id="screen-reuse-search" class="screen" hidden>
     <div class="topbar">
       <button class="icon-back" id="btn-reuse-search-back">‹ Πίσω</button>
-      <h2>Χρήση υπάρχοντος</h2>
+      <div class="topbar-title">
+        <p class="topbar-eyebrow" id="reuse-search-eyebrow">Χρήση υπάρχοντος</p>
+        <h2>Επιλογή πηγής</h2>
+      </div>
     </div>
+    <p class="notice-banner">⏳ Θα εφαρμοστεί μόνο μετά τον επόμενο συγχρονισμό στον υπολογιστή — όχι αμέσως.</p>
     <div class="search-box">
       <input type="text" id="reuse-search" placeholder="Αναζήτηση…">
     </div>
@@ -123,7 +136,10 @@
   <section id="screen-reuse-files" class="screen" hidden>
     <div class="topbar">
       <button class="icon-back" id="btn-reuse-files-back">‹ Πίσω</button>
-      <h2 id="reuse-files-title">Επιλογή συνημμένου</h2>
+      <div class="topbar-title">
+        <p class="topbar-eyebrow" id="reuse-files-eyebrow">Χρήση υπάρχοντος</p>
+        <h2>Επιλογή αρχείου</h2>
+      </div>
     </div>
     <div class="list" id="reuse-files-list"></div>
   </section>
@@ -131,7 +147,10 @@
   <section id="screen-pick-entity" class="screen" hidden>
     <div class="topbar">
       <button class="icon-back" id="btn-pick-entity-back">‹ Πίσω</button>
-      <h2 id="pick-entity-title">Επιλογή μονάδας</h2>
+      <div class="topbar-title">
+        <p class="topbar-eyebrow" id="pick-entity-eyebrow">Νέο Συνημμένο</p>
+        <h2 id="pick-entity-title">Επιλογή μονάδας</h2>
+      </div>
     </div>
     <div class="search-box">
       <input type="text" id="pick-entity-search" placeholder="Αναζήτηση…">
@@ -142,7 +161,9 @@
   <section id="screen-browse" class="screen" hidden>
     <div class="topbar">
       <button class="icon-back" id="btn-browse-back">‹ Πίσω</button>
-      <h2>Προβολή / Αναζήτηση</h2>
+      <div class="topbar-title">
+        <h2>Προβολή / Αναζήτηση</h2>
+      </div>
     </div>
     <div class="tabs">
       <button id="tab-units" class="active">Μονάδες</button>
@@ -157,7 +178,9 @@
   <section id="screen-unit-detail" class="screen" hidden>
     <div class="topbar">
       <button class="icon-back" id="btn-unit-detail-back">‹ Πίσω</button>
-      <h2>Στοιχεία μονάδας</h2>
+      <div class="topbar-title">
+        <h2>Στοιχεία μονάδας</h2>
+      </div>
     </div>
     <div class="card">
       <div class="detail-hero">
@@ -177,7 +200,9 @@
   <section id="screen-task-detail" class="screen" hidden>
     <div class="topbar">
       <button class="icon-back" id="btn-task-detail-back">‹ Πίσω</button>
-      <h2>Στοιχεία εργασίας</h2>
+      <div class="topbar-title">
+        <h2>Στοιχεία εργασίας</h2>
+      </div>
     </div>
     <div class="card">
       <div class="detail-hero">
@@ -219,10 +244,10 @@
 </main>
 
 <script src="https://apis.google.com/js/api.js" async defer></script>
-<script src="config.js?v=13"></script>
-<script src="auth.js?v=13"></script>
-<script src="picker.js?v=13"></script>
-<script src="drive.js?v=13"></script>
-<script src="app.js?v=13"></script>
+<script src="config.js?v=14"></script>
+<script src="auth.js?v=14"></script>
+<script src="picker.js?v=14"></script>
+<script src="drive.js?v=14"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>

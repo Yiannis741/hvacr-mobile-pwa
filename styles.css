@@ -7,8 +7,8 @@
   --border:rgba(255,255,255,.08);
   --border-strong:rgba(255,255,255,.16);
   --text:#f2f1f6;
-  --text-dim:#a3a1ad;
-  --text-faint:#716f7c;
+  --text-dim:#c3c1cd;
+  --text-faint:#8f8d99;
   --accent:#ff7a45;
   --accent-2:#ff9466;
   --accent-soft:rgba(255,122,69,.16);
@@ -38,17 +38,18 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+html{font-size:18px}
 body{margin:0;min-height:100vh;font-family:"Segoe UI",Inter,Arial,sans-serif;color:var(--text);
   background:radial-gradient(900px 500px at 15% -10%,#211f29,transparent 60%),radial-gradient(700px 480px at 100% 0%,#1c2430,transparent 55%),var(--bg-canvas);
 }
 header{padding:16px 20px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.03);backdrop-filter:blur(14px);position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px}
-header h1{font-size:1.05rem;margin:0;font-weight:700;letter-spacing:-.01em}
+header h1{font-size:1.15rem;margin:0;font-weight:700;letter-spacing:-.01em}
 main{padding:18px 16px 36px;max-width:520px;margin:0 auto}
 .screen{display:flex;flex-direction:column;gap:14px}
 .card{background:linear-gradient(180deg,var(--surface-2),var(--surface));border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;box-shadow:var(--shadow-card)}
-.card p{color:var(--text-dim);font-size:.92rem;line-height:1.5;margin:0 0 12px}
+.card p{color:var(--text-dim);font-size:1rem;line-height:1.5;margin:0 0 12px}
 
-button{background:var(--btn-accent);background-image:linear-gradient(180deg,var(--btn-accent-2),var(--btn-accent));color:#2c1808;border:0;border-radius:var(--radius-pill);padding:12px 18px;font-size:.95rem;font-weight:700;font-family:inherit;cursor:pointer;width:100%;transition:transform .12s ease,filter .12s ease;box-shadow:0 3px 9px rgba(180,105,60,.22)}
+button{background:var(--btn-accent);background-image:linear-gradient(180deg,var(--btn-accent-2),var(--btn-accent));color:#2c1808;border:0;border-radius:var(--radius-pill);padding:13px 18px;font-size:1rem;font-weight:700;font-family:inherit;cursor:pointer;width:100%;transition:transform .12s ease,filter .12s ease;box-shadow:0 3px 9px rgba(180,105,60,.22)}
 button:hover{filter:brightness(1.05)}
 button:active{transform:scale(.98)}
 button:disabled{opacity:.55;cursor:default;transform:none}
@@ -58,19 +59,19 @@ button.danger{background:var(--btn-red);background-image:linear-gradient(180deg,
 button.violet{background:var(--btn-violet);background-image:linear-gradient(180deg,var(--btn-violet-2),var(--btn-violet));color:#fff;box-shadow:0 3px 9px rgba(100,88,160,.22)}
 button.ghost{background:transparent;background-image:none;color:var(--violet-2);border:1px solid var(--violet-soft);box-shadow:none;font-weight:600}
 
-.status{min-height:1.2em;font-size:.88rem;color:var(--blue);margin-top:10px}
-.status.error{color:var(--red)}
-.status.ok{color:var(--green)}
+.status{min-height:1.2em;font-size:1rem;color:var(--blue);margin-top:10px}
+.status.error{color:var(--red);background:var(--red-soft);padding:11px 13px;border-radius:var(--radius-sm);font-weight:700}
+.status.ok{color:var(--green);background:var(--green-soft);padding:11px 13px;border-radius:var(--radius-sm);font-weight:700}
 
-.kv{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:.9rem}
+.kv{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.98rem}
 .kv:last-child{border-bottom:none}
 .kv span:first-child{color:var(--text-dim)}
 [hidden]{display:none!important}
 
-label{display:block;font-size:.82rem;color:var(--text-dim);font-weight:600;text-transform:uppercase;letter-spacing:.02em;margin:14px 0 6px}
+label{display:block;font-size:.92rem;color:var(--text-dim);font-weight:700;text-transform:uppercase;letter-spacing:.02em;margin:16px 0 7px}
 label:first-child{margin-top:0}
 .required:after{content:" *";color:var(--red)}
-input[type=text],input[type=date],input[type=file],select,textarea{width:100%;background:var(--surface-3);color:var(--text);border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:11px 13px;font-size:.95rem;font-family:inherit}
+input[type=text],input[type=date],input[type=file],select,textarea{width:100%;background:var(--surface-3);color:var(--text);border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:12px 13px;font-size:1rem;font-family:inherit}
 select:focus,input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 ::placeholder{color:var(--text-faint)}
 textarea{resize:vertical;min-height:70px}
@@ -79,19 +80,33 @@ textarea{resize:vertical;min-height:70px}
 .button-row button{width:auto;flex:1}
 
 .pending-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
-.pending-item{font-size:.85rem;color:var(--text-dim);border-bottom:1px solid var(--border);padding-bottom:8px}
+.pending-item{font-size:.92rem;color:var(--text-dim);border-bottom:1px solid var(--border);padding-bottom:8px}
 .pending-item:last-child{border-bottom:none;padding-bottom:0}
 .pending-item .t{color:var(--text)}
 
-/* ── Top bar with back button ─────────────────────────────── */
+/* ── Top bar with back button + breadcrumb (eyebrow + title) ─── */
 .topbar{display:flex;align-items:center;gap:10px;margin-bottom:2px}
-.topbar button.icon-back{width:auto;flex:none;background:rgba(255,255,255,.06);background-image:none;color:var(--text);border:1px solid var(--border-strong);box-shadow:none;padding:9px 14px;font-weight:700}
-.topbar h2{margin:0;font-size:1rem;font-weight:700}
+.topbar button.icon-back{width:auto;flex:none;background:rgba(255,255,255,.06);background-image:none;color:var(--text);border:1px solid var(--border-strong);box-shadow:none;padding:10px 14px;font-weight:700}
+.topbar-title{display:flex;flex-direction:column;gap:1px;min-width:0}
+.topbar-eyebrow{margin:0;font-size:.76rem;color:var(--violet-2);text-transform:uppercase;letter-spacing:.04em;font-weight:700}
+.topbar h2{margin:0;font-size:1.15rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ── Tabs ──────────────────────────────────────────────────── */
 .tabs{display:flex;gap:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-pill);padding:5px}
-.tabs button{flex:1;background:transparent;background-image:none;color:var(--text-dim);box-shadow:none;padding:9px 12px;font-weight:700}
+.tabs button{flex:1;background:transparent;background-image:none;color:var(--text-dim);box-shadow:none;padding:10px 12px;font-weight:700}
 .tabs button.active{background:var(--btn-accent);background-image:linear-gradient(180deg,var(--btn-accent-2),var(--btn-accent));color:#2c1808;box-shadow:0 3px 9px rgba(180,105,60,.22)}
+
+/* ── Segmented choice (π.χ. Νέο αρχείο / Χρήση υπάρχοντος) ───── */
+.segmented{display:flex;gap:8px;margin-top:6px}
+.segmented-btn{flex:1;width:auto;background:rgba(255,255,255,.06);background-image:none;color:var(--text-dim);border:1px solid var(--border-strong);box-shadow:none;font-weight:700;padding:12px 10px}
+.segmented-btn.active{background:var(--btn-accent);background-image:linear-gradient(180deg,var(--btn-accent-2),var(--btn-accent));color:#2c1808;border-color:transparent;box-shadow:0 3px 9px rgba(180,105,60,.22)}
+
+/* ── Κεντρική οθόνη: μεγάλα πλακίδια αντί για στοιβαγμένα κουμπιά ── */
+.action-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:22px 10px;font-size:.98rem;line-height:1.25;text-align:center}
+.tile.full{grid-column:1/-1;flex-direction:row;padding:16px}
+.tile-icon{font-size:1.9rem;line-height:1}
+.tile.full .tile-icon{font-size:1.4rem}
 
 /* ── Search ────────────────────────────────────────────────── */
 .search-box{position:relative}
@@ -99,15 +114,22 @@ textarea{resize:vertical;min-height:70px}
 
 /* ── List rows ─────────────────────────────────────────────── */
 .list{display:flex;flex-direction:column;gap:8px}
-.list-row{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:13px 14px;cursor:pointer;transition:background .12s ease}
+.list-row{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 15px;cursor:pointer;transition:background .12s ease}
 .list-row:hover{background:var(--surface-3)}
-.list-row .row-title{font-weight:700;font-size:.94rem;color:var(--text)}
-.list-row .row-sub{font-size:.8rem;color:var(--text-dim);margin-top:3px}
+.list-row .row-title{font-weight:700;font-size:1.02rem;color:var(--text)}
+.list-row .row-sub{font-size:.88rem;color:var(--text-dim);margin-top:3px}
 .list-row .row-badges{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
-.muted-note{color:var(--text-faint);font-size:.86rem;text-align:center;padding:18px 0}
+.muted-note{color:var(--text-dim);font-size:.95rem;text-align:center;padding:18px 0}
+
+/* ── Ενότητες λίστας (π.χ. "Πρόσφατα" πάνω από την ιεραρχία) ─── */
+.section-divider{margin:16px 0 8px;padding-top:12px;border-top:1px dashed var(--border-strong);font-size:.78rem;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em}
+.section-divider:first-child{margin-top:0;padding-top:0;border-top:none}
+
+/* ── Ενημερωτικό banner (π.χ. "εφαρμόζεται στον επόμενο συγχρονισμό") ── */
+.notice-banner{background:var(--yellow-soft);color:var(--yellow);border-radius:var(--radius-sm);padding:11px 13px;font-size:.92rem;font-weight:600;line-height:1.4}
 
 /* ── Badges ────────────────────────────────────────────────── */
-.badge{display:inline-flex;align-items:center;gap:4px;font-size:.72rem;font-weight:700;padding:3px 9px;border-radius:var(--radius-pill);text-transform:uppercase;letter-spacing:.02em}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:.78rem;font-weight:700;padding:4px 10px;border-radius:var(--radius-pill);text-transform:uppercase;letter-spacing:.02em}
 .badge.status-pending{background:var(--yellow-soft);color:var(--yellow)}
 .badge.status-completed{background:var(--green-soft);color:var(--green)}
 .badge.priority-low{background:var(--blue-soft);color:var(--blue)}
@@ -116,6 +138,6 @@ textarea{resize:vertical;min-height:70px}
 .badge.att-count{background:var(--violet-soft);color:var(--violet-2)}
 
 /* ── Detail sections ───────────────────────────────────────── */
-.detail-hero h2{margin:0 0 4px;font-size:1.15rem}
-.detail-hero p{margin:0;color:var(--text-dim);font-size:.85rem}
-.section-title{font-size:.78rem;font-weight:700;color:var(--violet-2);text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px}
+.detail-hero h2{margin:0 0 4px;font-size:1.25rem}
+.detail-hero p{margin:0;color:var(--text-dim);font-size:.92rem}
+.section-title{font-size:.84rem;font-weight:700;color:var(--violet-2);text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px}

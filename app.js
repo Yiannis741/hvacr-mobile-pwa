@@ -292,10 +292,32 @@ function hvRenderPickRows(rows) {
   });
 }
 
+// --- "Πρόσφατα": θυμόμαστε τις τελευταίες μονάδες/εργασίες που επιλέχθηκαν, ώστε ο
+// τεχνικός να μην περνάει κάθε φορά από τα 3 επίπεδα Τοποθεσία → Ομάδα → Μονάδα όταν
+// δουλεύει επανειλημμένα στο ίδιο σημείο μέσα στην ίδια επίσκεψη.
+function hvLoadRecentEntities() {
+  try { return JSON.parse(localStorage.getItem("hv_recent_entities") || "[]"); } catch (e) { return []; }
+}
+function hvSaveRecentEntities(list) {
+  localStorage.setItem("hv_recent_entities", JSON.stringify(list));
+}
+function hvRememberRecentEntity(type, o) {
+  if (!o.value || o.value.startsWith("local:")) return; // εκκρεμείς (μη συγχρονισμένες) δεν αποθηκεύονται
+  let list = hvLoadRecentEntities().filter((r) => !(r.type === type && r.value === o.value));
+  list.unshift({ type, value: o.value, label: o.label, sub: o.sub || "" });
+  hvSaveRecentEntities(list.slice(0, 6));
+}
+
 function hvSelectPickedEntity(o) {
   window.hvSelectedEntity = { value: o.value, label: o.label };
   $("btn-pick-entity").textContent = o.label;
+  hvRememberRecentEntity($("attachment-entity-type").value, o);
   hvShowScreen("screen-add-attachment");
+}
+
+function hvPickEntityEyebrow() {
+  const type = $("attachment-entity-type").value;
+  return "Νέο Συνημμένο · " + (type === "unit" ? "Μονάδα" : "Εργασία");
 }
 
 function hvPickEntityTitle() {
@@ -313,6 +335,7 @@ function hvPickEntityTitle() {
 function hvRenderPickEntityList() {
   const type = $("attachment-entity-type").value;
   const q = $("pick-entity-search").value.trim().toLowerCase();
+  $("pick-entity-eyebrow").textContent = hvPickEntityEyebrow();
   $("pick-entity-title").textContent = hvPickEntityTitle();
   const snap = window.hvSnapshot || {};
 
@@ -361,6 +384,45 @@ function hvRenderPickEntityList() {
           },
         });
       }
+    }
+    const recents = hvLoadRecentEntities().filter((r) => r.type === type);
+    if (recents.length) {
+      const list = $("pick-entity-list");
+      const recentRows = recents.map((r) => ({ label: r.label, sub: r.sub, onSelect: () => hvSelectPickedEntity({ value: r.value, label: r.label }) }));
+      const recentHtml = recentRows
+        .map(
+          (r, i) => `<div class="list-row" data-recent-idx="${i}">
+            <div class="row-title">${hvEscapeHtml(r.label)}</div>
+            ${r.sub ? `<div class="row-sub">${hvEscapeHtml(String(r.sub))}</div>` : ""}
+          </div>`
+        )
+        .join("");
+      list.innerHTML =
+        '<div class="section-divider">Πρόσφατα</div>' +
+        recentHtml +
+        '<div class="section-divider">Όλες οι τοποθεσίες</div>';
+      list.querySelectorAll("[data-recent-idx]").forEach((row) => {
+        row.onclick = () => recentRows[Number(row.dataset.recentIdx)].onSelect();
+      });
+      const rest = document.createElement("div");
+      rest.className = "list";
+      list.appendChild(rest);
+      if (!rows.length) {
+        rest.innerHTML = '<p class="muted-note">Δεν βρέθηκαν αποτελέσματα.</p>';
+      } else {
+        rest.innerHTML = rows
+          .map(
+            (r, i) => `<div class="list-row" data-idx="${i}">
+              <div class="row-title">${hvEscapeHtml(r.label)}</div>
+              ${r.sub ? `<div class="row-sub">${hvEscapeHtml(String(r.sub))}</div>` : ""}
+            </div>`
+          )
+          .join("");
+        rest.querySelectorAll("[data-idx]").forEach((row) => {
+          row.onclick = () => rows[Number(row.dataset.idx)].onSelect();
+        });
+      }
+      return;
     }
     hvRenderPickRows(rows);
     return;
@@ -491,12 +553,19 @@ $("btn-pick-entity-back").onclick = () => {
   hvRenderPickEntityList();
 };
 
+function hvResetAttachmentMode() {
+  $("mode-new-file").classList.add("active");
+  $("mode-reuse").classList.remove("active");
+  $("attach-new-section").hidden = false;
+}
+
 $("btn-add-attachment").onclick = () => {
   $("attachment-entity-type").value = "unit";
   $("attachment-files").value = "";
   $("add-attachment-status").textContent = "";
   $("add-attachment-status").className = "status";
   hvResetAttachmentEntitySelection();
+  hvResetAttachmentMode();
   hvShowScreen("screen-add-attachment");
 };
 
@@ -611,7 +680,7 @@ function hvRenderReuseSearch() {
 function hvOpenReuseFiles() {
   const type = $("attachment-entity-type").value;
   const e = hvReuseSourceEntity;
-  $("reuse-files-title").textContent = type === "unit" ? e.name : e.description || "(χωρίς περιγραφή)";
+  $("reuse-files-eyebrow").textContent = "Χρήση υπάρχοντος · " + (type === "unit" ? e.name : e.description || "(χωρίς περιγραφή)");
   const list = $("reuse-files-list");
   list.innerHTML = e.attachments
     .map((a, i) => `<div class="list-row" data-idx="${i}"><div class="row-title">${hvEscapeHtml(a.name)}</div></div>`)
@@ -653,12 +722,20 @@ async function hvConfirmReuseAttachment(att) {
   }
 }
 
-$("btn-reuse-attachment").onclick = () => {
+$("mode-new-file").onclick = () => {
+  $("mode-new-file").classList.add("active");
+  $("mode-reuse").classList.remove("active");
+  $("attach-new-section").hidden = false;
+};
+$("mode-reuse").onclick = () => {
   if (!window.hvSelectedEntity) {
     $("add-attachment-status").textContent = "Επίλεξε πρώτα εργασία ή μονάδα προορισμού.";
     $("add-attachment-status").className = "status error";
     return;
   }
+  $("mode-reuse").classList.add("active");
+  $("mode-new-file").classList.remove("active");
+  $("reuse-search-eyebrow").textContent = "Χρήση υπάρχοντος · " + (($("attachment-entity-type").value === "unit") ? "Μονάδα" : "Εργασία");
   $("reuse-search").value = "";
   hvRenderReuseSearch();
   hvShowScreen("screen-reuse-search");
@@ -848,6 +925,7 @@ function hvOpenAddAttachmentFor(type, realId) {
   $("add-attachment-status").textContent = "";
   $("add-attachment-status").className = "status";
   $("attachment-entity-label").textContent = type === "task" ? "Εργασία" : "Μονάδα";
+  hvResetAttachmentMode();
   const option = hvBuildEntityOptions(type).find((o) => o.value === `real:${realId}`);
   if (option) {
     window.hvSelectedEntity = { value: option.value, label: option.label };
