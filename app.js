@@ -173,6 +173,7 @@ $("btn-add-unit").onclick = () => {
 };
 
 $("btn-cancel-add-unit").onclick = () => hvShowScreen("screen-main");
+$("btn-add-unit-back").onclick = () => hvShowScreen("screen-main");
 
 $("btn-submit-unit").onclick = async () => {
   const status = $("add-unit-status");
@@ -229,6 +230,43 @@ function hvResetAttachmentEntitySelection() {
   $("attachment-entity-label").textContent = type === "task" ? "Εργασία" : "Μονάδα";
   window.hvSelectedEntity = null;
   $("btn-pick-entity").textContent = "Επίλεξε…";
+}
+
+// --- Ουρά επιλεγμένων συνημμένων (νέα αρχεία + "χρήση υπάρχοντος" μαζί) ---
+// Τίποτα δεν ανεβαίνει/συνδέεται μέχρι να πατηθεί το τελικό "Υποβολή" - έτσι ο τεχνικός
+// βλέπει μπροστά του όλα όσα πρόκειται να προσθέσει σε αυτή τη μονάδα/εργασία, μπορεί να
+// αφαιρέσει κάτι πριν στείλει, και μετά την επιτυχή αποστολή μένει στην ίδια σελίδα (δεν
+// πετάγεται στην αρχική) - ίδια συμπεριφορά είτε είναι νέο αρχείο είτε "χρήση υπάρχοντος".
+window.hvAttachQueue = [];
+
+function hvResetAttachQueue() {
+  window.hvAttachQueue = [];
+  hvRenderAttachQueue();
+}
+
+function hvRenderAttachQueue() {
+  const wrap = $("attach-queue-wrap");
+  const list = $("attach-queue-list");
+  const queue = window.hvAttachQueue;
+  if (!queue.length) {
+    wrap.hidden = true;
+    list.innerHTML = "";
+    return;
+  }
+  wrap.hidden = false;
+  list.innerHTML = queue
+    .map(
+      (item, i) =>
+        `<div class="list-row queue-row"><span class="row-title">${item.kind === "reuse" ? "📎 " : "📷 "}${hvEscapeHtml(item.name)}</span>` +
+        `<button type="button" class="remove-btn" data-remove-idx="${i}">Αφαίρεση</button></div>`
+    )
+    .join("");
+  list.querySelectorAll("[data-remove-idx]").forEach((btn) => {
+    btn.onclick = () => {
+      window.hvAttachQueue.splice(Number(btn.dataset.removeIdx), 1);
+      hvRenderAttachQueue();
+    };
+  });
 }
 
 function hvUnitLocationName(u) {
@@ -566,12 +604,27 @@ $("btn-add-attachment").onclick = () => {
   $("add-attachment-status").className = "status";
   hvResetAttachmentEntitySelection();
   hvResetAttachmentMode();
+  hvResetAttachQueue();
   hvShowScreen("screen-add-attachment");
 };
 
-$("attachment-entity-type").onchange = hvResetAttachmentEntitySelection;
+$("attachment-entity-type").onchange = () => {
+  hvResetAttachmentEntitySelection();
+  hvResetAttachQueue();
+};
 
 $("btn-cancel-add-attachment").onclick = () => hvShowScreen("screen-main");
+$("btn-add-attachment-back").onclick = () => hvShowScreen("screen-main");
+
+$("btn-choose-files").onclick = () => $("attachment-files").click();
+$("attachment-files").onchange = () => {
+  const files = $("attachment-files").files;
+  for (let i = 0; i < files.length; i++) {
+    window.hvAttachQueue.push({ kind: "new", file: files[i], name: files[i].name });
+  }
+  $("attachment-files").value = "";
+  hvRenderAttachQueue();
+};
 
 $("btn-submit-attachment").onclick = async () => {
   const status = $("add-attachment-status");
@@ -579,7 +632,7 @@ $("btn-submit-attachment").onclick = async () => {
   const outboxId = window.hvOutboxId;
   const type = $("attachment-entity-type").value;
   const selected = window.hvSelectedEntity;
-  const files = $("attachment-files").files;
+  const queue = window.hvAttachQueue;
   if (!token || !outboxId) {
     status.textContent = "Κάνε πρώτα ανανέωση στην κύρια οθόνη.";
     status.className = "status error";
@@ -590,8 +643,8 @@ $("btn-submit-attachment").onclick = async () => {
     status.className = "status error";
     return;
   }
-  if (!files || !files.length) {
-    status.textContent = "Επίλεξε τουλάχιστον ένα αρχείο.";
+  if (!queue.length) {
+    status.textContent = "Πρόσθεσε τουλάχιστον ένα αρχείο (νέο ή υπάρχον).";
     status.className = "status error";
     return;
   }
@@ -600,19 +653,33 @@ $("btn-submit-attachment").onclick = async () => {
   const localUnitRef = kind === "local" ? rawId : null;
   const entityLabel = selected.label;
   $("btn-submit-attachment").disabled = true;
+  let sent = 0;
   try {
-    for (let i = 0; i < files.length; i++) {
-      status.textContent = `Συμπίεση & αποστολή ${i + 1}/${files.length}…`;
+    for (let i = 0; i < queue.length; i++) {
+      const item = queue[i];
+      status.textContent = `Αποστολή ${i + 1}/${queue.length}…`;
       status.className = "status";
-      const file = files[i];
-      await hvSubmitAttachment(token, outboxId, type, entityId, localUnitRef, file);
-      hvAddPendingLog({ kind: "attachment", text: `Συνημμένο: ${entityLabel} — ${file.name}` });
+      if (item.kind === "new") {
+        await hvSubmitAttachment(token, outboxId, type, entityId, localUnitRef, item.file);
+      } else {
+        await hvSubmitAttachmentLink(token, outboxId, type, item.attachmentId, entityId, localUnitRef);
+      }
+      sent++;
     }
-    status.textContent = "✓ Στάλθηκαν.";
+    const newCount = queue.filter((i) => i.kind === "new").length;
+    const reuseCount = queue.filter((i) => i.kind === "reuse").length;
+    const parts = [];
+    if (newCount) parts.push(`${newCount} νέο${newCount > 1 ? "α" : ""}`);
+    if (reuseCount) parts.push(`${reuseCount} υπάρχον${reuseCount > 1 ? "τα" : ""}`);
+    hvAddPendingLog({ kind: "attachment", text: `Συνημμένα: ${entityLabel} — ${parts.join(", ")}` });
+    window.hvAttachQueue = [];
+    hvRenderAttachQueue();
+    status.textContent = `✓ Στάλθηκαν ${sent} αρχεία.`;
     status.className = "status ok";
-    setTimeout(() => hvShowScreen("screen-main"), 600);
   } catch (err) {
-    status.textContent = "Σφάλμα: " + err.message;
+    window.hvAttachQueue = queue.slice(sent);
+    hvRenderAttachQueue();
+    status.textContent = `Σφάλμα μετά από ${sent} επιτυχείς αποστολές: ` + err.message;
     status.className = "status error";
   } finally {
     $("btn-submit-attachment").disabled = false;
@@ -691,35 +758,15 @@ function hvOpenReuseFiles() {
   hvShowScreen("screen-reuse-files");
 }
 
-async function hvConfirmReuseAttachment(att) {
+function hvConfirmReuseAttachment(att) {
+  // Δεν στέλνει τίποτα αμέσως - απλώς προσθέτει στην κοινή ουρά (μαζί με τυχόν νέα
+  // αρχεία), ώστε να φαίνονται όλα μαζί πριν το τελικό "Υποβολή".
+  window.hvAttachQueue.push({ kind: "reuse", attachmentId: att.id, name: att.name });
+  hvRenderAttachQueue();
   const status = $("add-attachment-status");
-  const token = hvGetValidToken();
-  const outboxId = window.hvOutboxId;
-  const type = $("attachment-entity-type").value;
-  const selected = window.hvSelectedEntity;
+  status.textContent = "Προστέθηκε στη λίστα προς αποστολή.";
+  status.className = "status ok";
   hvShowScreen("screen-add-attachment");
-  if (!token || !outboxId || !selected) {
-    status.textContent = "Κάνε πρώτα ανανέωση και επίλεξε εργασία/μονάδα προορισμού.";
-    status.className = "status error";
-    return;
-  }
-  const [kind, rawId] = selected.value.split(":");
-  const entityId = kind === "real" ? rawId : null;
-  const localUnitRef = kind === "local" ? rawId : null;
-  status.textContent = "Αποστολή…";
-  status.className = "status";
-  try {
-    await hvSubmitAttachmentLink(token, outboxId, type, att.id, entityId, localUnitRef);
-    hvAddPendingLog({
-      kind: "attachment",
-      text: `Σύνδεση υπάρχοντος: ${selected.label} — ${att.name} (θα εφαρμοστεί στον επόμενο συγχρονισμό)`,
-    });
-    status.textContent = "✓ Στάλθηκε (θα εφαρμοστεί στον επόμενο συγχρονισμό στον υπολογιστή).";
-    status.className = "status ok";
-  } catch (err) {
-    status.textContent = "Σφάλμα: " + err.message;
-    status.className = "status error";
-  }
 }
 
 $("mode-new-file").onclick = () => {
@@ -926,6 +973,7 @@ function hvOpenAddAttachmentFor(type, realId) {
   $("add-attachment-status").className = "status";
   $("attachment-entity-label").textContent = type === "task" ? "Εργασία" : "Μονάδα";
   hvResetAttachmentMode();
+  hvResetAttachQueue();
   const option = hvBuildEntityOptions(type).find((o) => o.value === `real:${realId}`);
   if (option) {
     window.hvSelectedEntity = { value: option.value, label: option.label };

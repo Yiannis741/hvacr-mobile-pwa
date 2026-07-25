@@ -58,6 +58,12 @@
   </section>
 
   <section id="screen-add-unit" class="screen" hidden>
+    <div class="topbar">
+      <button class="icon-back" id="btn-add-unit-back">‹ Πίσω</button>
+      <div class="topbar-title">
+        <h2>Νέα Μονάδα</h2>
+      </div>
+    </div>
     <div class="card">
       <label class="required">Όνομα μονάδας</label>
       <input type="text" id="unit-name">
@@ -89,6 +95,12 @@
   </section>
 
   <section id="screen-add-attachment" class="screen" hidden>
+    <div class="topbar">
+      <button class="icon-back" id="btn-add-attachment-back">‹ Πίσω</button>
+      <div class="topbar-title">
+        <h2>Νέο Συνημμένο</h2>
+      </div>
+    </div>
     <div class="card">
       <label class="required">Τύπος</label>
       <select id="attachment-entity-type">
@@ -107,8 +119,16 @@
 
       <div id="attach-new-section">
         <label class="required">Αρχεία (φωτογραφίες, PDF)</label>
-        <input type="file" id="attachment-files" accept="image/*,application/pdf" multiple>
+        <input type="file" id="attachment-files" accept="image/*,application/pdf" multiple hidden>
+        <button type="button" class="secondary" id="btn-choose-files">📁 Επιλογή αρχείων</button>
       </div>
+
+      <div id="attach-queue-wrap" hidden>
+        <label>Θα προστεθούν</label>
+        <div class="list" id="attach-queue-list"></div>
+      </div>
+
+      <p class="notice-banner" style="margin-top:14px">⏳ Η αποστολή εφαρμόζεται στον υπολογιστή μόνο στον επόμενο συγχρονισμό, όχι αμέσως.</p>
 
       <p id="add-attachment-status" class="status"></p>
       <div class="button-row">
@@ -244,10 +264,10 @@
 </main>
 
 <script src="https://apis.google.com/js/api.js" async defer></script>
-<script src="config.js?v=14"></script>
-<script src="auth.js?v=14"></script>
-<script src="picker.js?v=14"></script>
-<script src="drive.js?v=14"></script>
-<script src="app.js?v=14"></script>
+<script src="config.js?v=15"></script>
+<script src="auth.js?v=15"></script>
+<script src="picker.js?v=15"></script>
+<script src="drive.js?v=15"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

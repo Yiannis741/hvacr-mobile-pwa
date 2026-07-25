@@ -121,6 +121,11 @@ textarea{resize:vertical;min-height:70px}
 .list-row .row-badges{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
 .muted-note{color:var(--text-dim);font-size:.95rem;text-align:center;padding:18px 0}
 
+/* ── Ουρά επιλεγμένων συνημμένων (πριν την Υποβολή) ───────────── */
+.queue-row{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:default}
+.queue-row .row-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.queue-row .remove-btn{width:auto;flex:none;padding:6px 12px;background:var(--red-soft);background-image:none;color:var(--red);border:0;border-radius:var(--radius-pill);font-weight:700;font-size:.85rem;box-shadow:none}
+
 /* ── Ενότητες λίστας (π.χ. "Πρόσφατα" πάνω από την ιεραρχία) ─── */
 .section-divider{margin:16px 0 8px;padding-top:12px;border-top:1px dashed var(--border-strong);font-size:.78rem;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em}
 .section-divider:first-child{margin-top:0;padding-top:0;border-top:none}
