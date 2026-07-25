@@ -920,9 +920,21 @@ function hvRenderReuseSearch() {
   });
 }
 
+// Εικονίδιο ανά τύπο αρχείου (fallback όσο φορτώνει, ή όταν δεν υπάρχει μικρογραφία —
+// π.χ. PDF, ή φωτογραφία που δεν πρόλαβε ακόμα να δημιουργήσει μικρογραφία ο υπολογιστής).
+function hvFileTypeIcon(name) {
+  const ext = (String(name || "").split(".").pop() || "").toLowerCase();
+  if (["jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "bmp"].includes(ext)) return "🖼️";
+  if (ext === "pdf") return "📄";
+  return "📎";
+}
+
 // ΣΗΜΑΝΤΙΚΟ (σαφήνεια πηγής/προορισμού): εδώ ο τεχνικός βλέπει τα αρχεία μιας ΑΛΛΗΣ
 // μονάδας/εργασίας (της "πηγής") — γι' αυτό δείχνουμε ρητά και σε ποιον προορισμό θα
 // συνδεθεί ό,τι επιλέξει, ώστε να μη μπερδεύεται ποιο είναι το ένα και ποιο το άλλο.
+// Δείχνουμε επίσης πραγματική μικρογραφία (όχι μόνο εικονίδιο) για φωτογραφίες, αν ο
+// υπολογιστής την έχει ήδη ανεβάσει στο Drive (has_thumb στο snapshot) — φορτώνει
+// ασύγχρονα, μία-μία, χωρίς να καθυστερεί την εμφάνιση της λίστας.
 function hvOpenReuseFiles() {
   const type = $("attachment-entity-type").value;
   const e = hvReuseSourceEntity;
@@ -932,12 +944,30 @@ function hvOpenReuseFiles() {
   $("reuse-files-target-note").textContent = "Το αρχείο που θα διαλέξεις θα συνδεθεί με: " + destLabel;
   const list = $("reuse-files-list");
   list.innerHTML = e.attachments
-    .map((a, i) => `<div class="list-row" data-idx="${i}"><div class="row-title">${hvEscapeHtml(a.name)}</div></div>`)
+    .map(
+      (a, i) =>
+        `<div class="list-row reuse-file-row" data-idx="${i}">` +
+        `<div class="reuse-file-thumb" id="reuse-thumb-${i}">${hvFileTypeIcon(a.name)}</div>` +
+        `<div class="reuse-file-info"><div class="row-title">${hvEscapeHtml(a.name)}</div></div>` +
+        `</div>`
+    )
     .join("");
   list.querySelectorAll("[data-idx]").forEach((row) => {
     row.onclick = () => hvConfirmReuseAttachment(e.attachments[Number(row.dataset.idx)], sourceLabel);
   });
   hvShowScreen("screen-reuse-files");
+  const token = hvGetValidToken();
+  const thumbFolderId = window.hvSyncFolders ? window.hvSyncFolders.thumbnails : null;
+  if (token && thumbFolderId) {
+    e.attachments.forEach((a, i) => {
+      if (!a.has_thumb) return;
+      hvFetchThumbnailUrl(token, thumbFolderId, a.id).then((url) => {
+        if (!url) return;
+        const el = $(`reuse-thumb-${i}`);
+        if (el) el.innerHTML = `<img src="${url}" alt="">`;
+      });
+    });
+  }
 }
 
 function hvConfirmReuseAttachment(att, sourceLabel) {

@@ -125,6 +125,12 @@ textarea{resize:vertical;min-height:70px}
 .list-row .row-badges{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
 .muted-note{color:var(--text-dim);font-size:.95rem;text-align:center;padding:18px 0}
 
+/* ── "Χρήση υπάρχοντος": γραμμές με (σχετικά μεγάλη) μικρογραφία/εικονίδιο ──── */
+.reuse-file-row{display:flex;align-items:center;gap:12px}
+.reuse-file-thumb{width:56px;height:56px;flex:none;border-radius:var(--radius-sm);background:var(--surface-3);display:flex;align-items:center;justify-content:center;font-size:1.9rem;overflow:hidden}
+.reuse-file-thumb img{width:100%;height:100%;object-fit:cover;border-radius:var(--radius-sm)}
+.reuse-file-info{flex:1;min-width:0}
+
 /* ── Ουρά επιλεγμένων συνημμένων (πριν την Υποβολή) ───────────── */
 .queue-row{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:default}
 .queue-row .row-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

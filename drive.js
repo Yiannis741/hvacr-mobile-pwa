@@ -25,13 +25,30 @@ const HV_FOLDER_MIME = "application/vnd.google-apps.folder";
 // στο πρώτο "Συγχρονισμός Τώρα" — αν δεν υπάρχουν ακόμα, σημαίνει ότι δεν έχει τρέξει
 // ποτέ συγχρονισμός στον υπολογιστή.
 async function hvGetSyncFolders(token, rootId) {
-  const names = ["outbox", "processed", "failed", "snapshot"];
+  const names = ["outbox", "processed", "failed", "snapshot", "thumbnails"];
   const result = {};
   for (const name of names) {
     const f = await hvDriveFindChild(token, rootId, name, HV_FOLDER_MIME);
     result[name] = f ? f.id : null;
   }
   return result;
+}
+
+// Επιστρέφει ένα blob URL για τη μικρογραφία ενός συνημμένου, αν υπάρχει στο Drive (ο
+// desktop τη δημιουργεί μόνο για φωτογραφίες, βλ. _write_attachment_thumbnail στο
+// server.py) — αλλιώς null (το κινητό δείχνει τότε απλό εικονίδιο ανά τύπο αρχείου).
+async function hvFetchThumbnailUrl(token, thumbFolderId, attachmentId) {
+  if (!thumbFolderId) return null;
+  try {
+    const file = await hvDriveFindChild(token, thumbFolderId, `${attachmentId}.jpg`);
+    if (!file) return null;
+    const r = await fetch(`${HV_DRIVE_API}/files/${file.id}?alt=media`, { headers: hvAuthHeaders(token) });
+    if (!r.ok) return null;
+    const blob = await r.blob();
+    return URL.createObjectURL(blob);
+  } catch (e) {
+    return null;
+  }
 }
 
 async function hvDriveReadFileText(token, fileId) {
