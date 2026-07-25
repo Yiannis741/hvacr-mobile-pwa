@@ -99,6 +99,7 @@
 
       <label class="required">Αρχεία (φωτογραφίες, PDF)</label>
       <input type="file" id="attachment-files" accept="image/*,application/pdf" multiple>
+      <button type="button" class="secondary" id="btn-reuse-attachment" style="margin-top:8px">Χρήση υπάρχοντος</button>
 
       <p id="add-attachment-status" class="status"></p>
       <div class="button-row">
@@ -106,6 +107,25 @@
         <button id="btn-submit-attachment">Υποβολή</button>
       </div>
     </div>
+  </section>
+
+  <section id="screen-reuse-search" class="screen" hidden>
+    <div class="topbar">
+      <button class="icon-back" id="btn-reuse-search-back">‹ Πίσω</button>
+      <h2>Χρήση υπάρχοντος</h2>
+    </div>
+    <div class="search-box">
+      <input type="text" id="reuse-search" placeholder="Αναζήτηση…">
+    </div>
+    <div class="list" id="reuse-search-list"></div>
+  </section>
+
+  <section id="screen-reuse-files" class="screen" hidden>
+    <div class="topbar">
+      <button class="icon-back" id="btn-reuse-files-back">‹ Πίσω</button>
+      <h2 id="reuse-files-title">Επιλογή συνημμένου</h2>
+    </div>
+    <div class="list" id="reuse-files-list"></div>
   </section>
 
   <section id="screen-pick-entity" class="screen" hidden>
@@ -199,10 +219,10 @@
 </main>
 
 <script src="https://apis.google.com/js/api.js" async defer></script>
-<script src="config.js?v=11"></script>
-<script src="auth.js?v=11"></script>
-<script src="picker.js?v=11"></script>
-<script src="drive.js?v=11"></script>
-<script src="app.js?v=11"></script>
+<script src="config.js?v=13"></script>
+<script src="auth.js?v=13"></script>
+<script src="picker.js?v=13"></script>
+<script src="drive.js?v=13"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>

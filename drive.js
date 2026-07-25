@@ -212,3 +212,17 @@ async function hvSubmitAttachment(token, outboxId, entityType, entityId, localUn
   await hvDriveUploadJSON(token, outboxId, `${id}.json`, request);
   return id;
 }
+
+// Στέλνει αίτημα σύνδεσης ΗΔΗ υπάρχοντος συνημμένου (attachment.link) - "Χρήση
+// υπάρχοντος": δεν ανεβάζει ξανά το αρχείο, απλώς ζητά από τον υπολογιστή να συνδέσει
+// ένα ήδη ανεβασμένο attachment_id και με αυτή την εργασία/μονάδα. Εφαρμόζεται μόνο στον
+// επόμενο συγχρονισμό στον υπολογιστή (όχι άμεσα).
+async function hvSubmitAttachmentLink(token, outboxId, kind, attachmentId, entityId, localUnitRef) {
+  const id = hvUuid();
+  const payload = { kind, attachment_id: attachmentId };
+  if (entityId) payload.entity_id = entityId;
+  if (localUnitRef) payload.local_unit_ref = localUnitRef;
+  const request = { id, type: "attachment.link", payload, created_at: new Date().toISOString() };
+  await hvDriveUploadJSON(token, outboxId, `${id}.json`, request);
+  return id;
+}

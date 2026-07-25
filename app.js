@@ -6,6 +6,8 @@ const HV_SCREENS = [
   "screen-main",
   "screen-add-unit",
   "screen-add-attachment",
+  "screen-reuse-search",
+  "screen-reuse-files",
   "screen-pick-entity",
   "screen-browse",
   "screen-unit-detail",
@@ -547,6 +549,123 @@ $("btn-submit-attachment").onclick = async () => {
     $("btn-submit-attachment").disabled = false;
   }
 };
+
+// --- "Χρήση υπάρχοντος" συνημμένου ---
+// Ίδια ιδέα με το desktop: αντί να ανεβάσεις ξανά το ίδιο αρχείο, διαλέγεις μια ΑΛΛΗ
+// εργασία/μονάδα (ίδιου τύπου) που έχει ήδη δικά της συνημμένα, μετά ένα συγκεκριμένο
+// αρχείο της, και ζητάμε από τον υπολογιστή να το συνδέσει ΚΑΙ με τον τρέχοντα
+// προορισμό. ΣΗΜΑΝΤΙΚΟ: εδώ δεν εφαρμόζεται άμεσα (όπως στο desktop) - είναι ένα ακόμα
+// αίτημα στο outbox, οπότε θα φανεί στον υπολογιστή μόνο μετά τον επόμενο συγχρονισμό.
+// Ψάχνουμε μόνο μέσα στο ήδη φορτωμένο snapshot (χωρίς API call), γι' αυτό ο desktop
+// server συμπεριλαμβάνει πλέον στο snapshot.json τη λίστα (id,name) των συνημμένων κάθε
+// εργασίας/μονάδας που έχει τουλάχιστον ένα.
+let hvReuseSourceEntity = null;
+
+function hvReuseEntitiesWithOwnAttachments(type) {
+  const snap = window.hvSnapshot || {};
+  const list = type === "unit" ? snap.units || [] : snap.tasks || [];
+  return list.filter((e) => e.attachments && e.attachments.length);
+}
+
+function hvRenderReuseSearch() {
+  const type = $("attachment-entity-type").value;
+  const q = $("reuse-search").value.trim().toLowerCase();
+  const selected = window.hvSelectedEntity;
+  const entities = hvReuseEntitiesWithOwnAttachments(type).filter((e) => {
+    if (selected && selected.value === `real:${e.id}`) return false;
+    if (!q) return true;
+    const label = type === "unit" ? e.name : e.description || "";
+    const sub =
+      type === "unit"
+        ? [e.location, hvUnitGroupName(e)].filter(Boolean).join(" ")
+        : [e.unit_name, e.location_name].filter(Boolean).join(" ");
+    return `${label} ${sub}`.toLowerCase().includes(q);
+  });
+  const list = $("reuse-search-list");
+  if (!entities.length) {
+    list.innerHTML =
+      '<p class="muted-note">Δεν βρέθηκε καμία ' + (type === "unit" ? "μονάδα" : "εργασία") + " με δικά της συνημμένα.</p>";
+    return;
+  }
+  list.innerHTML = entities
+    .map((e, i) => {
+      const label = type === "unit" ? e.name : e.description || "(χωρίς περιγραφή)";
+      const sub =
+        type === "unit"
+          ? [e.location, hvUnitGroupName(e)].filter(Boolean).join(" · ")
+          : [e.unit_name, e.location_name].filter(Boolean).join(" · ");
+      return `<div class="list-row" data-idx="${i}">
+        <div class="row-title">${hvEscapeHtml(label)} <span style="color:var(--text-dim)">📎${e.attachments.length}</span></div>
+        <div class="row-sub">${hvEscapeHtml(sub)}</div>
+      </div>`;
+    })
+    .join("");
+  list.querySelectorAll("[data-idx]").forEach((row) => {
+    row.onclick = () => {
+      hvReuseSourceEntity = entities[Number(row.dataset.idx)];
+      hvOpenReuseFiles();
+    };
+  });
+}
+
+function hvOpenReuseFiles() {
+  const type = $("attachment-entity-type").value;
+  const e = hvReuseSourceEntity;
+  $("reuse-files-title").textContent = type === "unit" ? e.name : e.description || "(χωρίς περιγραφή)";
+  const list = $("reuse-files-list");
+  list.innerHTML = e.attachments
+    .map((a, i) => `<div class="list-row" data-idx="${i}"><div class="row-title">${hvEscapeHtml(a.name)}</div></div>`)
+    .join("");
+  list.querySelectorAll("[data-idx]").forEach((row) => {
+    row.onclick = () => hvConfirmReuseAttachment(e.attachments[Number(row.dataset.idx)]);
+  });
+  hvShowScreen("screen-reuse-files");
+}
+
+async function hvConfirmReuseAttachment(att) {
+  const status = $("add-attachment-status");
+  const token = hvGetValidToken();
+  const outboxId = window.hvOutboxId;
+  const type = $("attachment-entity-type").value;
+  const selected = window.hvSelectedEntity;
+  hvShowScreen("screen-add-attachment");
+  if (!token || !outboxId || !selected) {
+    status.textContent = "Κάνε πρώτα ανανέωση και επίλεξε εργασία/μονάδα προορισμού.";
+    status.className = "status error";
+    return;
+  }
+  const [kind, rawId] = selected.value.split(":");
+  const entityId = kind === "real" ? rawId : null;
+  const localUnitRef = kind === "local" ? rawId : null;
+  status.textContent = "Αποστολή…";
+  status.className = "status";
+  try {
+    await hvSubmitAttachmentLink(token, outboxId, type, att.id, entityId, localUnitRef);
+    hvAddPendingLog({
+      kind: "attachment",
+      text: `Σύνδεση υπάρχοντος: ${selected.label} — ${att.name} (θα εφαρμοστεί στον επόμενο συγχρονισμό)`,
+    });
+    status.textContent = "✓ Στάλθηκε (θα εφαρμοστεί στον επόμενο συγχρονισμό στον υπολογιστή).";
+    status.className = "status ok";
+  } catch (err) {
+    status.textContent = "Σφάλμα: " + err.message;
+    status.className = "status error";
+  }
+}
+
+$("btn-reuse-attachment").onclick = () => {
+  if (!window.hvSelectedEntity) {
+    $("add-attachment-status").textContent = "Επίλεξε πρώτα εργασία ή μονάδα προορισμού.";
+    $("add-attachment-status").className = "status error";
+    return;
+  }
+  $("reuse-search").value = "";
+  hvRenderReuseSearch();
+  hvShowScreen("screen-reuse-search");
+};
+$("reuse-search").oninput = hvRenderReuseSearch;
+$("btn-reuse-search-back").onclick = () => hvShowScreen("screen-add-attachment");
+$("btn-reuse-files-back").onclick = () => hvShowScreen("screen-reuse-search");
 
 // --- Προβολή / Αναζήτηση ---
 const hvStatusLabel = { pending: "Εκκρεμής", completed: "Ολοκληρωμένη" };
