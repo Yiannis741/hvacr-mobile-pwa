@@ -83,6 +83,10 @@ textarea{resize:vertical;min-height:70px}
 .pending-item{font-size:.92rem;color:var(--text-dim);border-bottom:1px solid var(--border);padding-bottom:8px}
 .pending-item:last-child{border-bottom:none;padding-bottom:0}
 .pending-item .t{color:var(--text)}
+.pending-item-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;flex-wrap:wrap}
+.pending-item-when{font-size:.78rem;color:var(--text-faint)}
+.pending-sub{color:var(--text);font-size:.92rem;margin-top:3px}
+.badge.status-failed{background:var(--red-soft);color:var(--red)}
 
 /* ── Top bar with back button + breadcrumb (eyebrow + title) ─── */
 .topbar{display:flex;align-items:center;gap:10px;margin-bottom:2px}

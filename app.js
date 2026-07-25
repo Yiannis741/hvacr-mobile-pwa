@@ -25,7 +25,13 @@ function hvEscapeHtml(str) {
 }
 
 // --- Τοπική ουρά "εκκρεμών" καταχωρήσεων (μόνο για ενημέρωση του τεχνικού) ---
-// hv_pending_log: [{ts, kind:'unit'|'attachment', text, localId?}]
+// hv_pending_log: [{ts, kind:'unit'|'attachment'|'task', text, localId?, ids:[...], status,
+//                    targets?:[{entityType,entityLabel,newCount,reuseCount,reuseSources}]}]
+// - ids: τα UUID των αιτημάτων που στάλθηκαν στο outbox γι' αυτή την καταχώρηση — με αυτά
+//   ελέγχουμε αργότερα (hvCheckPendingStatuses) αν ο υπολογιστής τα επεξεργάστηκε.
+// - status: "pending" (στάλθηκε στο Drive, ο υπολογιστής δεν το έχει τραβήξει ακόμα),
+//   "applied" (ο υπολογιστής το επεξεργάστηκε με επιτυχία), "failed" (ο υπολογιστής
+//   βρήκε σφάλμα σε αυτό το αίτημα).
 function hvLoadPendingLog() {
   try { return JSON.parse(localStorage.getItem("hv_pending_log") || "[]"); } catch (e) { return []; }
 }
@@ -34,13 +40,38 @@ function hvSavePendingLog(log) {
 }
 function hvAddPendingLog(entry) {
   const log = hvLoadPendingLog();
-  log.unshift({ ts: new Date().toISOString(), ...entry });
+  log.unshift({ ts: new Date().toISOString(), status: "pending", ...entry });
   hvSavePendingLog(log);
   hvRenderPendingList();
 }
 function hvPendingUnits() {
   return hvLoadPendingLog().filter((e) => e.kind === "unit" && e.localId);
 }
+
+function hvPendingStatusBadge(status) {
+  if (status === "applied") return '<span class="badge status-completed">✓ Το πήρε ο υπολογιστής</span>';
+  if (status === "failed") return '<span class="badge status-failed">✗ Σφάλμα στον υπολογιστή</span>';
+  return '<span class="badge status-pending">⏳ Στάλθηκε — αναμονή υπολογιστή</span>';
+}
+
+// Ίδια λογική παρουσίασης με την ουρά στο "Νέο Συνημμένο": ομαδοποίηση ανά προορισμό,
+// με "(από: Χ)" για ό,τι ήρθε από "χρήση υπάρχοντος" — ώστε να φαίνεται ξεκάθαρα και εδώ
+// πού πήγε κάθε αρχείο και από πού ήρθε.
+function hvPendingAttachmentDetail(entry) {
+  return (entry.targets || [])
+    .map((t) => {
+      const icon = t.entityType === "unit" ? "🏭" : "📋";
+      const parts = [];
+      if (t.newCount) parts.push(`${t.newCount} νέο${t.newCount > 1 ? "α" : ""}`);
+      if (t.reuseCount) {
+        const src = t.reuseSources && t.reuseSources.length ? ` (από: ${t.reuseSources.join(", ")})` : "";
+        parts.push(`${t.reuseCount} υπάρχον${t.reuseCount > 1 ? "τα" : ""}${src}`);
+      }
+      return `<div class="pending-sub">${icon} ${hvEscapeHtml(t.entityLabel)} — ${parts.join(", ")}</div>`;
+    })
+    .join("");
+}
+
 function hvRenderPendingList() {
   const log = hvLoadPendingLog();
   const card = $("pending-card");
@@ -54,9 +85,61 @@ function hvRenderPendingList() {
   list.innerHTML = log
     .map((e) => {
       const when = new Date(e.ts).toLocaleString("el-GR");
-      return `<div class="pending-item"><div class="t">${hvEscapeHtml(e.text)}</div>${when}</div>`;
+      const badge = hvPendingStatusBadge(e.status);
+      const detail =
+        e.kind === "attachment" && e.targets && e.targets.length
+          ? hvPendingAttachmentDetail(e)
+          : `<div class="t">${hvEscapeHtml(e.text)}</div>`;
+      return `<div class="pending-item">
+        <div class="pending-item-head">${badge}<span class="pending-item-when">${when}</span></div>
+        ${detail}
+      </div>`;
     })
     .join("");
+}
+
+// Ελέγχει (μέσω των φακέλων processed/failed στο Drive) αν ο υπολογιστής έχει ήδη
+// επεξεργαστεί κάθε εκκρεμή καταχώρηση, και ενημερώνει το status της. "applied" είναι
+// τελική κατάσταση (δεν ξαναελέγχεται) — "failed" επίσης, αφού δεν "διορθώνεται" μόνο
+// του. Τρέχει αυτόματα σε κάθε "Ανανέωση", όχι μόνο όταν στέλνεται κάτι καινούργιο.
+async function hvCheckPendingStatuses(token, folders) {
+  if (!folders || !folders.processed) return;
+  const log = hvLoadPendingLog();
+  let changed = false;
+  for (const entry of log) {
+    if (!entry.ids || !entry.ids.length) continue;
+    if (entry.status === "applied" || entry.status === "failed") continue;
+    let anyFailed = false;
+    let allApplied = true;
+    for (const id of entry.ids) {
+      let done = null;
+      try {
+        done = await hvDriveFindChild(token, folders.processed, `${id}.json`);
+      } catch (e) {
+        done = null;
+      }
+      if (done) continue;
+      allApplied = false;
+      if (folders.failed) {
+        let failedFile = null;
+        try {
+          failedFile = await hvDriveFindChild(token, folders.failed, `${id}.json`);
+        } catch (e) {
+          failedFile = null;
+        }
+        if (failedFile) anyFailed = true;
+      }
+    }
+    const newStatus = anyFailed ? "failed" : allApplied ? "applied" : "pending";
+    if (entry.status !== newStatus) {
+      entry.status = newStatus;
+      changed = true;
+    }
+  }
+  if (changed) {
+    hvSavePendingLog(log);
+    hvRenderPendingList();
+  }
 }
 
 window.onHvAuthSuccess = function (token) {
@@ -91,8 +174,10 @@ async function hvRefreshData() {
     $("info-tasks-count").textContent = (snapshot.tasks || []).length;
     window.hvSnapshot = snapshot;
     window.hvOutboxId = folders.outbox;
+    window.hvSyncFolders = folders;
     status.textContent = "✓ Ενημερώθηκε.";
     status.className = "status ok";
+    hvCheckPendingStatuses(token, folders);
   } catch (err) {
     status.textContent = "Σφάλμα: " + err.message;
     status.className = "status error";
@@ -206,7 +291,7 @@ $("btn-submit-unit").onclick = async () => {
   status.className = "status";
   try {
     const localId = await hvSubmitUnitCreate(token, outboxId, payload);
-    hvAddPendingLog({ kind: "unit", localId, text: `Νέα μονάδα: ${name}` });
+    hvAddPendingLog({ kind: "unit", localId, ids: [localId], text: `Νέα μονάδα: ${name}` });
     status.textContent = "✓ Στάλθηκε.";
     status.className = "status ok";
     setTimeout(() => hvShowScreen("screen-main"), 600);
@@ -713,6 +798,7 @@ $("btn-submit-attachment").onclick = async () => {
   $("btn-submit-attachment").disabled = true;
   let sent = 0;
   const perTarget = {};
+  const sentIds = [];
   try {
     for (let i = 0; i < queue.length; i++) {
       const item = queue[i];
@@ -721,14 +807,16 @@ $("btn-submit-attachment").onclick = async () => {
       const [kind, rawId] = item.entityValue.split(":");
       const entityId = kind === "real" ? rawId : null;
       const localUnitRef = kind === "local" ? rawId : null;
+      let reqId;
       if (item.kind === "new") {
-        await hvSubmitAttachment(token, outboxId, item.entityType, entityId, localUnitRef, item.file);
+        reqId = await hvSubmitAttachment(token, outboxId, item.entityType, entityId, localUnitRef, item.file);
       } else {
-        await hvSubmitAttachmentLink(token, outboxId, item.entityType, item.attachmentId, entityId, localUnitRef);
+        reqId = await hvSubmitAttachmentLink(token, outboxId, item.entityType, item.attachmentId, entityId, localUnitRef);
       }
+      sentIds.push(reqId);
       sent++;
       const key = item.entityType + ":" + item.entityValue;
-      if (!perTarget[key]) perTarget[key] = { label: item.entityLabel, newC: 0, reuseC: 0, reuseSources: [] };
+      if (!perTarget[key]) perTarget[key] = { label: item.entityLabel, entityType: item.entityType, newC: 0, reuseC: 0, reuseSources: [] };
       if (item.kind === "new") {
         perTarget[key].newC++;
       } else {
@@ -738,20 +826,28 @@ $("btn-submit-attachment").onclick = async () => {
         }
       }
     }
-    // Το μήνυμα στις "Εκκρεμείς καταχωρήσεις" πρέπει να είναι σαφές ΚΑΙ για το από πού
-    // ήρθε κάθε "υπάρχον" συνημμένο — όχι μόνο πού πάει.
-    const summary = Object.values(perTarget)
+    // Δομημένα δεδομένα (όχι μόνο κείμενο) ώστε η λίστα "Εκκρεμείς" στην αρχική οθόνη να
+    // μπορεί να τα παρουσιάσει με την ίδια σαφήνεια (ομαδοποίηση ανά προορισμό + "από:")
+    // όπως εδώ, στη σελίδα "Νέο Συνημμένο".
+    const targets = Object.values(perTarget).map((t) => ({
+      entityType: t.entityType,
+      entityLabel: t.label,
+      newCount: t.newC,
+      reuseCount: t.reuseC,
+      reuseSources: t.reuseSources,
+    }));
+    const summary = targets
       .map((t) => {
         const parts = [];
-        if (t.newC) parts.push(`${t.newC} νέο${t.newC > 1 ? "α" : ""}`);
-        if (t.reuseC) {
+        if (t.newCount) parts.push(`${t.newCount} νέο${t.newCount > 1 ? "α" : ""}`);
+        if (t.reuseCount) {
           const src = t.reuseSources.length ? ` (από: ${t.reuseSources.join(", ")})` : "";
-          parts.push(`${t.reuseC} υπάρχον${t.reuseC > 1 ? "τα" : ""}${src}`);
+          parts.push(`${t.reuseCount} υπάρχον${t.reuseCount > 1 ? "τα" : ""}${src}`);
         }
-        return `${t.label} — ${parts.join(", ")}`;
+        return `${t.entityLabel} — ${parts.join(", ")}`;
       })
       .join(" · ");
-    hvAddPendingLog({ kind: "attachment", text: `Συνημμένα: ${summary}` });
+    hvAddPendingLog({ kind: "attachment", ids: sentIds, targets, text: `Συνημμένα: ${summary}` });
     window.hvAttachQueue = [];
     hvRenderAttachQueue();
     status.textContent = `✓ Στάλθηκαν ${sent} αρχεία.`;
@@ -1049,8 +1145,12 @@ $("btn-td-save").onclick = async () => {
   status.textContent = "Αποστολή…";
   status.className = "status";
   try {
-    await hvSubmitTaskUpdate(token, outboxId, t.id, changes);
-    hvAddPendingLog({ kind: "task", text: `Ενημέρωση εργασίας: ${changes.description || t.description || "#" + t.id}` });
+    const reqId = await hvSubmitTaskUpdate(token, outboxId, t.id, changes);
+    hvAddPendingLog({
+      kind: "task",
+      ids: [reqId],
+      text: `Ενημέρωση εργασίας: ${changes.description || t.description || "#" + t.id}`,
+    });
     status.textContent = "✓ Στάλθηκε.";
     status.className = "status ok";
   } catch (err) {
